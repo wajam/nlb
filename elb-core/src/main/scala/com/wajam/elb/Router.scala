@@ -17,36 +17,40 @@ import scala.util.matching.Regex.Match
  * Time: 10:18
  */
 
-object Router {
+class Router(knownPaths: List[String],
+             zookeeperServers: String,
+             resolvingService: String,
+             httpPort: Int) {
 
   private val logger = LoggerFactory.getLogger("elb.router.logger")
 
-  val config = ElbConfiguration.fromSystemProperties
+  val matchers = getMatchers(knownPaths)
 
-  val paths: List[String] = config.getKnownPaths.map { path =>
-    val idMatcher = """:\w+"""
-
-    // Map /foo/:id/bar to /foo/(\w+)/.+
-    (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
-      // Map /foo/:id to /foo/(\w+)$
-      case result if result.equals(path) => (idMatcher + """$""").r replaceFirstIn(path, """(\\w+)\$""") match {
-        case result if result.equals(path) => throw new Exception("Unable to parse specified path: " + path)
-        case result => result
-      }
-      case result => result
-    }
-  }.distinct
-
-  val matchers = paths.map(_.r)
-
-  lazy val zookeeper = new ZookeeperClient(config.getZookeeperServers)
+  lazy val zookeeper = new ZookeeperClient(zookeeperServers)
   val clusterManager = new ZookeeperClusterManager(zookeeper)
   val node = new LocalNode(Map("nrv" -> 9701))
   val cluster = new Cluster(node, clusterManager)
-  val service = new Service(config.getResolvingService)
+  val service = new Service(resolvingService)
   cluster.registerService(service)
   cluster.applySupport(resolver = Some(new Resolver()))
   cluster.start()
+
+  private def getMatchers(paths: List[String]) = {
+    paths.map { path =>
+      val idMatcher = """:\w+"""
+
+      // Map /foo/:id/bar to /foo/(\w+)/.+
+      val matcher = (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
+        // Map /foo/:id to /foo/(\w+)$
+        case result if result.equals(path) => (idMatcher + """$""").r replaceFirstIn(path, """(\\w+)\$""") match {
+          case result if result.equals(path) => throw new Exception("Unable to parse specified path: " + path)
+          case result => result
+        }
+        case result => result
+      }
+      matcher.r
+    }.distinct
+  }
 
   @tailrec
   private def getId(path: String, matchers: List[Regex] = matchers): Option[String] = {
@@ -72,7 +76,7 @@ object Router {
         logger.info("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
-          case Some(member) => (member.node.host, config.getHttpPort)
+          case Some(member) => (member.node.host, httpPort)
           case _ => throw new Exception("Could not find Service Member for token " + token)
         }
       }
@@ -82,7 +86,7 @@ object Router {
         val members = service.members
         val randPos = Random.nextInt(members.size)
 
-        (members.toList(randPos).node.host, config.getHttpPort)
+        (members.toList(randPos).node.host, httpPort)
       }
     }
   }

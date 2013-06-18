@@ -4,11 +4,11 @@ import akka.actor._
 import akka.io.IO
 import spray.can.Http
 import spray.util.SprayActorLogging
-import akka.util.duration._
 import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import akka.util.Timeout
 import spray.can.client.ClientConnectionSettings
 import java.net.InetAddress
+import com.wajam.elb.ActorFactory
 
 /**
  * User: Clément
@@ -81,7 +81,6 @@ class ElbClientActor(host: InetAddress, port: Int, implicit val timeout: Timeout
   }
 }
 
-object ElbClientActor {
-
-  def apply(host: InetAddress, port: Int, timeout: Int)(implicit system: ActorSystem) = system.actorOf(Props(new ElbClientActor(host, port, timeout.seconds)))
+object ElbClientActor extends ActorFactory {
+  def apply(host: InetAddress, port: Int) = new ElbClientActor(host, port, timeout)
 }

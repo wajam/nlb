@@ -7,15 +7,14 @@ import spray.can.Http
 import spray.util._
 import spray.http._
 import com.wajam.elb.client.ElbClientActor
-import com.wajam.elb.{ElbConfiguration, Router}
+import com.wajam.elb.{ActorFactory, ElbConfiguration, Router}
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
-class ServerService(implicit config: ElbConfiguration) extends Actor with SprayActorLogging {
-  implicit val timeout: Timeout = config.getServerTimeout.seconds
+class ServerService(router: Router, implicit val timeout: Timeout) extends Actor with SprayActorLogging {
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
@@ -23,28 +22,38 @@ class ServerService(implicit config: ElbConfiguration) extends Actor with SprayA
 
     case request: HttpRequest =>
       val peer = sender // since the Props creator is executed asyncly we need to save the sender ref
-      context actorOf Props(new ElbRouterActor(peer, request, config.getRouterTimeout.seconds)(context.system))
+      context actorOf Props(ElbRouterActor(peer, request, router))
   }
+}
 
-  class ElbRouterActor(client: ActorRef, request: HttpRequest, implicit val timeout: Timeout)(implicit system: ActorSystem) extends Actor with SprayActorLogging {
+object ServerService extends ActorFactory {
 
-    log.info("Starting forwarding response for {}...", request)
+  def apply(router: Router) = new ServerService(router, timeout)
+}
 
-    val recipient = Router.resolve(request.uri.path.toString)
+class ElbRouterActor(client: ActorRef, request: HttpRequest, router: Router, implicit val timeout: Timeout) extends Actor with SprayActorLogging {
 
-    log.info("Routing to node {}:{}...", recipient._1.getHostAddress, recipient._2)
+  log.info("Starting forwarding response for {}...", request)
 
-    val clientActor = ElbClientActor(recipient._1, recipient._2, config.getClientTimeout)
+  val recipient = router.resolve(request.uri.path.toString)
 
-    clientActor ! request
+  log.info("Routing to node {}:{}...", recipient._1.getHostAddress, recipient._2)
 
-    def receive = {
-      // Client actor stopped, stop the router
-      case Status.Success | Status.Failure =>
-        context.stop(self)
+  val clientActor = context actorOf(Props(ElbClientActor(recipient._1, recipient._2)))
 
-      case response =>
-        client ! response
-    }
+  clientActor ! request
+
+  def receive = {
+    // Client actor stopped, stop the router
+    case Status.Success | Status.Failure =>
+      context.stop(self)
+
+    case response =>
+      client ! response
   }
+}
+
+object ElbRouterActor extends ActorFactory {
+
+  def apply(client: ActorRef, request: HttpRequest, router: Router) = new ElbRouterActor(client, request, router, timeout)
 }
