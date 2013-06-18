@@ -55,6 +55,7 @@ object Router {
         logger.info("Extracted id "+ id +" from path "+ path +" with matcher " + matcher)
 
         val token = Resolver.hashData(id)
+        logger.info("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
           case Some(member) => (member.node.host, config.getHttpPort)

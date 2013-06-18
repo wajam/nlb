@@ -7,15 +7,15 @@ import spray.can.Http
 import spray.util._
 import spray.http._
 import com.wajam.elb.client.ElbClientActor
-import com.wajam.elb.Router
+import com.wajam.elb.{ElbConfiguration, Router}
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
-class ServerService extends Actor with SprayActorLogging {
-  implicit val timeout: Timeout = 5.seconds // for the actor 'asks'
+class ServerService(implicit config: ElbConfiguration) extends Actor with SprayActorLogging {
+  implicit val timeout: Timeout = config.getServerTimeout.seconds
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
@@ -23,17 +23,18 @@ class ServerService extends Actor with SprayActorLogging {
 
     case request: HttpRequest =>
       val peer = sender // since the Props creator is executed asyncly we need to save the sender ref
-      context actorOf Props(new ElbRouterActor(peer, request)(context.system))
+      context actorOf Props(new ElbRouterActor(peer, request, config.getRouterTimeout.seconds)(context.system))
   }
 
-  class ElbRouterActor(client: ActorRef, request: HttpRequest)(implicit system: ActorSystem) extends Actor with SprayActorLogging {
-    implicit val timeout: Timeout = 5.seconds
+  class ElbRouterActor(client: ActorRef, request: HttpRequest, implicit val timeout: Timeout)(implicit system: ActorSystem) extends Actor with SprayActorLogging {
 
     log.info("Starting forwarding response for {}...", request)
 
     val recipient = Router.resolve(request.uri.path.toString)
 
-    val clientActor = ElbClientActor(recipient._1, recipient._2)
+    log.info("Routing to node {}:{}...", recipient._1.getHostAddress, recipient._2)
+
+    val clientActor = ElbClientActor(recipient._1, recipient._2, config.getClientTimeout)
 
     clientActor ! request
 

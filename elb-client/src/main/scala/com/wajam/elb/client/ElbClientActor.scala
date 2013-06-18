@@ -15,10 +15,8 @@ import java.net.InetAddress
  * Date: 2013-06-12
  */
 
-class ElbClientActor(host: InetAddress, port: Int) extends Actor with SprayActorLogging {
+class ElbClientActor(host: InetAddress, port: Int, implicit val timeout: Timeout) extends Actor with SprayActorLogging {
   import context.system
-
-  implicit val timeout: Timeout = 5.seconds
 
   def receive: Receive = {
     case request: HttpRequest =>
@@ -85,5 +83,5 @@ class ElbClientActor(host: InetAddress, port: Int) extends Actor with SprayActor
 
 object ElbClientActor {
 
-  def apply(host: InetAddress, port: Int)(implicit system: ActorSystem) = system.actorOf(Props(new ElbClientActor(host, port)))
+  def apply(host: InetAddress, port: Int, timeout: Int)(implicit system: ActorSystem) = system.actorOf(Props(new ElbClientActor(host, port, timeout.seconds)))
 }

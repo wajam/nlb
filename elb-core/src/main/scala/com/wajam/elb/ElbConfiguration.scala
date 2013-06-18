@@ -26,6 +26,18 @@ class ElbConfiguration(config: Configuration) {
   def getKnownPaths: List[String] = {
     config.getList("elb.knownpaths").toList.asInstanceOf[List[String]]
   }
+
+  def getServerTimeout: Int = {
+    config.getInt("elb.server.timeout")
+  }
+
+  def getRouterTimeout: Int = {
+    config.getInt("elb.router.timeout")
+  }
+
+  def getClientTimeout: Int = {
+    config.getInt("elb.client.timeout")
+  }
 }
 
 object ElbConfiguration {
