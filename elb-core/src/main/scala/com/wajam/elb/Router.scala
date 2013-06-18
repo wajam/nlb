@@ -7,6 +7,9 @@ import com.wajam.nrv.zookeeper.ZookeeperClient
 import scala.util.Random
 import org.slf4j._
 import java.net.InetAddress
+import scala.annotation.tailrec
+import scala.util.matching.Regex
+import scala.util.matching.Regex.Match
 
 /**
  * User: Clément
@@ -45,15 +48,26 @@ object Router {
   cluster.applySupport(resolver = Some(new Resolver()))
   cluster.start()
 
+  @tailrec
+  private def getId(path: String, matchers: List[Regex] = matchers): Option[String] = {
+    matchers match {
+      case Nil => None
+      case matcher :: _ => {
+        matcher.findFirstMatchIn(path) match {
+          case Some(m: Match) => {
+            val id = m.group(1)
+            logger.info("Extracted id "+ id +" with matcher "+ matcher)
+            Some(id)
+          }
+          case _ => getId(path, matchers.tail)
+        }
+      }
+    }
+  }
+
   def resolve(path: String): (InetAddress, Int) = {
-
-    matchers.find { matcher =>
-      !matcher.findFirstIn(path).isEmpty
-    } match {
-      case Some(matcher) => {
-        val id = matcher.replaceFirstIn(path, "$1")
-        logger.info("Extracted id "+ id +" from path "+ path +" with matcher " + matcher)
-
+    getId(path) match {
+      case Some(id) => {
         val token = Resolver.hashData(id)
         logger.info("Generated token "+ token)
 
