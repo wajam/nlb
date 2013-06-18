@@ -7,6 +7,7 @@
 *.iml
 *.class
 *.log
+logs/
 
 # Scala-IDE specific
 .scala_dependencies
