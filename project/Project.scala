@@ -20,11 +20,15 @@ object ElbBuild extends Build {
     "spy" at "http://files.couchbase.com/maven2/",
     "Twitter" at "http://maven.twttr.com/",
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
-    "Spray Repository" at "http://repo.spray.io"
+    "Spray Repository" at "http://repo.spray.io",
+    "Scallop" at "http://mvnrepository.com/"
   )
 
   var commonDeps = Seq(
+    "org.slf4j" % "slf4j-api" % "1.6.4",
     "com.wajam" % "nrv-core_2.9.1" % "0.1-SNAPSHOT",
+    "nl.grons" %% "metrics-scala" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
+    "com.wajam" % "nrv-zookeeper_2.9.1" % "0.1-SNAPSHOT",
     "org.scalatest" % "scalatest_2.9.0" % "1.9.1" % "test,it",
     "junit" % "junit" % "4.10" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",

@@ -15,6 +15,14 @@ class ElbConfiguration(config: Configuration) {
     config.getString("elb.zookeeper.servers")
   }
 
+  def getResolvingService: String = {
+    config.getString("elb.resolving.service")
+  }
+
+  def getHttpPort: Int = {
+    config.getInt("elb.http.port")
+  }
+
   def getKnownPaths: List[String] = {
     config.getList("elb.knownpaths").toList.asInstanceOf[List[String]]
   }

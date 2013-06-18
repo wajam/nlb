@@ -8,13 +8,14 @@ import akka.util.duration._
 import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import akka.util.Timeout
 import spray.can.client.ClientConnectionSettings
+import java.net.InetAddress
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
-class ElbClientActor(host: String) extends Actor with SprayActorLogging {
+class ElbClientActor(host: InetAddress, port: Int) extends Actor with SprayActorLogging {
   import context.system
 
   implicit val timeout: Timeout = 5.seconds
@@ -22,7 +23,7 @@ class ElbClientActor(host: String) extends Actor with SprayActorLogging {
   def receive: Receive = {
     case request: HttpRequest =>
       // start by establishing a new HTTP connection
-      IO(Http) ! Http.Connect(host, port = 8899, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
+      IO(Http) ! Http.Connect(host.getHostAddress, port = port, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
       context.become(connecting(sender, request))
   }
 
@@ -84,5 +85,5 @@ class ElbClientActor(host: String) extends Actor with SprayActorLogging {
 
 object ElbClientActor {
 
-  def apply(host: String)(implicit system: ActorSystem) = system.actorOf(Props(new ElbClientActor(host)))
+  def apply(host: InetAddress, port: Int)(implicit system: ActorSystem) = system.actorOf(Props(new ElbClientActor(host, port)))
 }

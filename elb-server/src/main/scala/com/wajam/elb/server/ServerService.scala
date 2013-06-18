@@ -7,6 +7,7 @@ import spray.can.Http
 import spray.util._
 import spray.http._
 import com.wajam.elb.client.ElbClientActor
+import com.wajam.elb.Router
 
 /**
  * User: Clément
@@ -30,7 +31,9 @@ class ServerService extends Actor with SprayActorLogging {
 
     log.info("Starting forwarding response for {}...", request)
 
-    val clientActor = ElbClientActor("127.0.0.1")
+    val recipient = Router.resolve(request.uri.path.toString)
+
+    val clientActor = ElbClientActor(recipient._1, recipient._2)
 
     clientActor ! request
 
