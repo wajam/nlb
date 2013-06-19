@@ -40,7 +40,7 @@ class Router(knownPaths: List[String],
       val idMatcher = """:\w+"""
 
       // Map /foo/:id/bar to /foo/(\w+)/.+
-      val matcher = (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
+      (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
         // Map /foo/:id to /foo/(\w+)$
         case result if result.equals(path) => (idMatcher + """$""").r replaceFirstIn(path, """(\\w+)\$""") match {
           case result if result.equals(path) => throw new Exception("Unable to parse specified path: " + path)
@@ -48,8 +48,7 @@ class Router(knownPaths: List[String],
         }
         case result => result
       }
-      matcher.r
-    }.distinct
+    }.distinct.map(_.r)
   }
 
   @tailrec
