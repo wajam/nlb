@@ -6,7 +6,7 @@ import com.wajam.nrv.zookeeper.cluster.ZookeeperClusterManager
 import com.wajam.nrv.zookeeper.ZookeeperClient
 import scala.util.Random
 import org.slf4j._
-import java.net.InetAddress
+import java.net.{InetSocketAddress, InetAddress}
 import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
@@ -68,14 +68,14 @@ class Router(knownPaths: List[String],
     }
   }
 
-  def resolve(path: String): (InetAddress, Int) = {
+  def resolve(path: String): InetSocketAddress = {
     getId(path) match {
       case Some(id) => {
         val token = Resolver.hashData(id)
         logger.info("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
-          case Some(member) => (member.node.host, httpPort)
+          case Some(member) => new InetSocketAddress(member.node.host, httpPort)
           case _ => throw new Exception("Could not find Service Member for token " + token)
         }
       }
@@ -85,7 +85,7 @@ class Router(knownPaths: List[String],
         val members = service.members
         val randPos = Random.nextInt(members.size)
 
-        (members.toList(randPos).node.host, httpPort)
+        new InetSocketAddress(members.toList(randPos).node.host, httpPort)
       }
     }
   }

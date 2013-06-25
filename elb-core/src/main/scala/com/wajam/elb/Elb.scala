@@ -2,6 +2,7 @@ package com.wajam.elb
 
 import akka.actor.{ActorSystem, Props}
 import akka.io.IO
+import akka.util.duration._
 import spray.can.Http
 import com.wajam.elb.server.{ElbRouterActor, ServerService}
 import com.wajam.elb.client.ElbClientActor
@@ -22,12 +23,14 @@ object Elb extends App {
                           config.getResolvingService,
                           config.getHttpPort)
 
+  val pool = new SprayConnectionPool(config.getConnectionPoolTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
+
   ServerService.setTimeOut(config.getServerTimeout)
   ElbClientActor.setTimeOut(config.getClientTimeout)
   ElbRouterActor.setTimeOut(config.getRouterTimeout)
 
   // the handler actor replies to incoming HttpRequests
-  val handler = system.actorOf(Props(ServerService(router)), name = "ServerHandler")
+  val handler = system.actorOf(Props(ServerService(pool, router)), name = "ServerHandler")
 
   IO(Http) ! Http.Bind(handler, interface = "localhost", port = 8080)
 

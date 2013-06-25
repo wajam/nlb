@@ -38,6 +38,14 @@ class ElbConfiguration(config: Configuration) {
   def getClientTimeout: Int = {
     config.getInt("elb.client.timeout")
   }
+
+  def getConnectionPoolTimeOut: Int = {
+    config.getInt("elb.connectionpool.timeout")
+  }
+
+  def getConnectionPoolMaxSize: Int = {
+    config.getInt("elb.connectionpool.maxsize")
+  }
 }
 
 object ElbConfiguration {

@@ -11,7 +11,7 @@ import akka.util.duration._
 trait ActorFactory {
   var timeout = 30.seconds
 
-  def setTimeOut(value: Int) {
+  private[elb] def setTimeOut(value: Int) {
     timeout = value.seconds
   }
 }

@@ -33,6 +33,7 @@ object ElbBuild extends Build {
     "junit" % "junit" % "4.10" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe.akka" % "akka-actor" % "2.0.5",
+    "com.typesafe.akka" % "akka-testkit" % "2.0.5",
     "io.spray" % "spray-io" % "1.0-M8.1",
     "io.spray" % "spray-http" % "1.0-M8.1",
     "io.spray" % "spray-util" % "1.0-M8.1",
