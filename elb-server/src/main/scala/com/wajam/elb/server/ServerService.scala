@@ -5,7 +5,7 @@ import akka.actor._
 import spray.can.Http
 import spray.util._
 import spray.http._
-import com.wajam.elb.{ActorFactory, SprayConnectionPool, Router}
+import com.wajam.elb.{SprayConnectionPool, Router}
 
 
 /**
@@ -14,8 +14,7 @@ import com.wajam.elb.{ActorFactory, SprayConnectionPool, Router}
  */
 
 class ServerService(pool: SprayConnectionPool,
-                    router: Router,
-                    implicit val timeout: Timeout) extends Actor with SprayActorLogging {
+                    router: Router) extends Actor with SprayActorLogging {
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
@@ -27,7 +26,7 @@ class ServerService(pool: SprayConnectionPool,
   }
 }
 
-object ServerService extends ActorFactory {
+object ServerService {
 
-  def apply(pool: SprayConnectionPool, router: Router) = new ServerService(pool, router, timeout)
+  def apply(pool: SprayConnectionPool, router: Router) = new ServerService(pool, router)
 }

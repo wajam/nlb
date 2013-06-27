@@ -8,29 +8,32 @@ import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, Me
 import akka.util.{Duration, Timeout}
 import spray.can.client.ClientConnectionSettings
 import java.net.{InetSocketAddress}
-import com.wajam.elb.ActorFactory
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
-class ElbClientActor(destination: InetSocketAddress, lifetime: Duration, implicit val timeout: Timeout) extends Actor with SprayActorLogging {
+class ElbClientActor(destination: InetSocketAddress,
+                     lifetime: Duration,
+                     IOconnector: ActorRef) extends Actor with SprayActorLogging {
   import context.system
+
+  case class Close()
 
   def receive: Receive = {
     case request: HttpRequest =>
       // start by establishing a new HTTP connection
-      val peer = sender
-      context.become(connecting(peer, request))
-      IO(Http) ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
+      val router = sender
+      context.become(connecting(router, request))
+      IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
   }
 
   def connecting(router: ActorRef, request: HttpRequest): Receive = {
     case _: Http.Connected =>
       // once connected, we can send the request across the connection
-      val peer = sender
-      switchToWaiting(peer)
+      val server = sender
+      switchToWaiting(server)
       self ! (router, request)
 
     case Http.CommandFailed(Http.Connect(address, _, _, _)) =>
@@ -47,7 +50,7 @@ class ElbClientActor(destination: InetSocketAddress, lifetime: Duration, implici
       server ! request
       log.info("Received a new request to send")
 
-    case ElbClientActor.Close =>
+    case Close =>
       context.become(closing)
       server ! Http.Close
 
@@ -82,10 +85,10 @@ class ElbClientActor(destination: InetSocketAddress, lifetime: Duration, implici
       log.info("Received a chunk")
 
     case responseEnd: ChunkedMessageEnd =>
-      val peer = sender
+      val server = sender
       router ! responseEnd
       log.info("Received a chunked response end")
-      switchToWaiting(peer)
+      switchToWaiting(server)
   }
 
   def closing: Receive = {
@@ -102,13 +105,11 @@ class ElbClientActor(destination: InetSocketAddress, lifetime: Duration, implici
   }
 
   private def switchToWaiting(server: ActorRef) {
-    val poison = system.scheduler.scheduleOnce(lifetime, self, ElbClientActor.Close)
+    val poison = system.scheduler.scheduleOnce(lifetime, self, Close)
     context.become(waiting(poison, server))
   }
 }
 
-object ElbClientActor extends ActorFactory {
-  def apply(destination: InetSocketAddress, lifetime: Duration) = new ElbClientActor(destination, lifetime, timeout)
-
-  case class Close()
+object ElbClientActor {
+  def apply(destination: InetSocketAddress, lifetime: Duration, IOconnector: ActorRef) = new ElbClientActor(destination, lifetime, IOconnector)
 }

@@ -15,6 +15,8 @@ import akka.actor.Terminated
 import akka.util.Duration
 import org.slf4j.LoggerFactory
 import com.wajam.elb.client.ElbClientActor
+import akka.io.IO
+import spray.can.Http
 
 case class Watch(child: ActorRef)
 case class UnWatch(child: ActorRef)
@@ -31,7 +33,9 @@ class Watcher(val pool: SprayConnectionPool) extends Actor {
   }
 }
 
-class SprayConnectionPool(timeout: Duration, maxSize: Int, system: ActorSystem) {
+class SprayConnectionPool(timeout: Duration,
+                          maxSize: Int,
+                          implicit val system: ActorSystem) {
   private val logger = LoggerFactory.getLogger("elb.connectionpool.logger")
 
   private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedQueue[ActorRef]] asScala
@@ -73,7 +77,7 @@ class SprayConnectionPool(timeout: Duration, maxSize: Int, system: ActorSystem) 
 
   // Get a new collection out of the pool
   def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    system actorOf(Props(ElbClientActor(destination, timeout)))
+    system actorOf Props(ElbClientActor(destination, timeout, IO(Http)))
   }
 
   // Get a pooled connection if available, otherwise get a new one

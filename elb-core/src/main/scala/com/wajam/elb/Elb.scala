@@ -25,10 +25,6 @@ object Elb extends App {
 
   val pool = new SprayConnectionPool(config.getConnectionPoolTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
 
-  ServerService.setTimeOut(config.getServerTimeout)
-  ElbClientActor.setTimeOut(config.getClientTimeout)
-  ElbRouterActor.setTimeOut(config.getRouterTimeout)
-
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(Props(ServerService(pool, router)), name = "ServerHandler")
 

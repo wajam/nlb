@@ -7,7 +7,7 @@ import spray.http._
 import spray.http.HttpHeaders.Connection
 import spray.util.SprayActorLogging
 import com.wajam.elb.client.ElbClientActor
-import com.wajam.elb.{SprayConnectionPool, Router, ActorFactory}
+import com.wajam.elb.{SprayConnectionPool, Router}
 
 /**
  * User: Clément
@@ -18,8 +18,7 @@ import com.wajam.elb.{SprayConnectionPool, Router, ActorFactory}
 class ElbRouterActor(pool: SprayConnectionPool,
                      client: ActorRef,
                      request: HttpRequest,
-                     router: Router,
-                     implicit val timeout: Timeout)
+                     router: Router)
   extends Actor with SprayActorLogging {
 
   log.info("Starting forwarding response for {}...", request)
@@ -61,7 +60,7 @@ class ElbRouterActor(pool: SprayConnectionPool,
   }
 }
 
-object ElbRouterActor extends ActorFactory {
+object ElbRouterActor {
 
-  def apply(pool: SprayConnectionPool, client: ActorRef, request: HttpRequest, router: Router) = new ElbRouterActor(pool, client, request, router, timeout)
+  def apply(pool: SprayConnectionPool, client: ActorRef, request: HttpRequest, router: Router) = new ElbRouterActor(pool, client, request, router)
 }
