@@ -1,3 +1,8 @@
+# Local configuration
+etc/nlb.properties
+etc/test.properties
+
+
 # IDE generated files #
 ######################
 .project

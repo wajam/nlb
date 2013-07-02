@@ -23,6 +23,10 @@ class NlbConfiguration(config: Configuration) {
     config.getInt("nlb.http.port")
   }
 
+  def getLocalNodePort: Int = {
+    config.getInt("nlb.localnode.port")
+  }
+
   def getKnownPaths: List[String] = {
     config.getList("nlb.knownpaths").toList.asInstanceOf[List[String]]
   }
@@ -54,10 +58,12 @@ object NlbConfiguration {
 
     val config = new CombinedConfiguration(new OverrideCombiner())
 
-    val envConfig = new PropertiesConfiguration(confPath)
-    config.addConfiguration(envConfig)
+    if(confPath != null) {
+      val envConfig = new PropertiesConfiguration(confPath)
+      config.addConfiguration(envConfig)
+    }
 
-    val defaultConfig = new PropertiesConfiguration("etc/default.properties")
+    val defaultConfig = new PropertiesConfiguration("etc/nlb.properties")
     config.addConfiguration(defaultConfig)
     new NlbConfiguration(config)
   }

@@ -21,7 +21,8 @@ object Nlb extends App {
   val router = new Router(config.getKnownPaths,
                           config.getZookeeperServers,
                           config.getResolvingService,
-                          config.getHttpPort)
+                          config.getHttpPort,
+                          config.getLocalNodePort)
 
   val pool = new SprayConnectionPool(config.getConnectionPoolTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
 

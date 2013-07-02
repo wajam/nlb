@@ -20,7 +20,8 @@ import scala.util.matching.Regex.Match
 class Router(knownPaths: List[String],
              zookeeperServers: String,
              resolvingService: String,
-             httpPort: Int) {
+             httpPort: Int,
+             localNodePort: Int) {
 
   private val logger = LoggerFactory.getLogger("nlb.router.logger")
 
@@ -28,7 +29,7 @@ class Router(knownPaths: List[String],
 
   lazy val zookeeper = new ZookeeperClient(zookeeperServers)
   val clusterManager = new ZookeeperClusterManager(zookeeper)
-  val node = new LocalNode(Map("nrv" -> 9701))
+  val node = new LocalNode(Map("nrv" -> localNodePort))
   val cluster = new Cluster(node, clusterManager)
   val service = new Service(resolvingService)
   cluster.registerService(service)
