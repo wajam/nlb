@@ -1,115 +1,171 @@
 package com.wajam.elb.client
 
+import java.net.InetSocketAddress
 import akka.actor._
-import akka.io.IO
+import akka.util.duration._
+import akka.util.Duration
 import spray.can.Http
 import spray.util.SprayActorLogging
 import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
-import akka.util.{Duration, Timeout}
 import spray.can.client.ClientConnectionSettings
-import java.net.{InetSocketAddress}
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
+/**
+ * Actor handling an HTTP connection with a specific node.
+ *
+ * @param destination the destination node
+ * @param lifetime the amount of time the connection is allowed to stay inactive
+ * @param IOconnector the actor handling the underlying connection (usually IO(Http), except when testing)
+ */
 class ElbClientActor(destination: InetSocketAddress,
                      lifetime: Duration,
                      IOconnector: ActorRef) extends Actor with SprayActorLogging {
   import context.system
 
-  case class Close()
+  var timeout: Cancellable = _
+  val defaultTimeout = 3 seconds
 
-  def receive: Receive = {
-    case request: HttpRequest =>
+  var router: ActorRef = _
+  var server: ActorRef = _
+  var request: HttpRequest = _
+
+  // Initial timeout
+  context.setReceiveTimeout(30 milliseconds)
+  
+  /**
+   * Behaviours
+   */
+
+  def receive =  {
+    case req: HttpRequest =>
       // start by establishing a new HTTP connection
-      val router = sender
-      context.become(connecting(router, request))
+      router = sender
+      request = req
+
+      context.become(connect)
+
       IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
+
+    case ReceiveTimeout => throw new InitialTimeoutException
   }
 
-  def connecting(router: ActorRef, request: HttpRequest): Receive = {
+  def connect: Receive = {
     case _: Http.Connected =>
       // once connected, we can send the request across the connection
-      val server = sender
-      switchToWaiting(server)
+      server = sender
+      startTimeoutAndWaitForRequest
       self ! (router, request)
 
-    case Http.CommandFailed(Http.Connect(address, _, _, _)) =>
-      router ! Status.Failure(new RuntimeException("Connection error"))
-      context.stop(self)
-      log.warning("Could not connect to {}", address)
+      // watch the Spray connector to monitor connection lifecycle
+      context.watch(server)
+
+    case ev: Http.CommandFailed =>
+      log.warning("Command failed ({})", ev)
+      throw new CommandFailedException(ev)
   }
 
-  def waiting(poison: Cancellable, server: ActorRef): Receive = {
+  def waitForRequest: Receive = handleErrors orElse {
     // Already connected, new request to send
-    case (router: ActorRef, request: HttpRequest) =>
-      poison.cancel()
-      context.become(waitingForResponse(router, server))
+    case (newRouter: ActorRef, request: HttpRequest) =>
+      clearTimeout()
+      // Bind the new router
+      router = newRouter
       server ! request
+      context.become(waitForResponse)
       log.info("Received a new request to send")
 
-    case Close =>
-      context.become(closing)
+    case poolTimeout: PoolTimeoutException =>
       server ! Http.Close
-
-    case ev: Http.ConnectionClosed =>
-      log.debug("Connection closed ({})", ev)
-      context.stop(self)
+      throw poolTimeout
+      log.info("Closing connection and going out of the pool")
   }
 
-  def waitingForResponse(router: ActorRef, server: ActorRef): Receive = {
+  def waitForResponse: Receive = handleErrors orElse {
     // Chunked responses
     case responseStart: ChunkedResponseStart =>
-      context.become(streaming(router))
       router ! responseStart
+      context.become(streamResponse)
       log.info("Received a chunked response start")
 
     // Unchunked responses
     case response@ HttpResponse(status, entity, _, _) =>
-      switchToWaiting(server)
       router ! response
+      startTimeoutAndWaitForRequest
       log.info("Received {} response with {} bytes", status, entity.buffer.length)
 
-    // Errors
-    case ev@(Http.SendFailed(_) | Timedout(_))=>
-      switchToWaiting(server)
-      router ! Status.Failure(new RuntimeException("Request error"))
-      log.warning("Received {}", ev)
+    // Specific errors
+    case ev: Http.SendFailed =>
+      log.warning("Send failed ({})", ev)
+      throw new SendFailedException(ev)
+
+    case ev: Timedout =>
+      log.warning("Received Timedout ({})", ev)
+      throw new RequestTimeoutException
   }
 
-  def streaming(router: ActorRef): Receive = {
+  def streamResponse: Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       router ! chunk
       log.info("Received a chunk")
 
     case responseEnd: ChunkedMessageEnd =>
-      val server = sender
       router ! responseEnd
+      startTimeoutAndWaitForRequest
       log.info("Received a chunked response end")
-      switchToWaiting(server)
   }
 
-  def closing: Receive = {
+  // All types of connection closing are already handled in handleErrors
+  def closeConnection: Receive = handleErrors
+
+  // Connection failures that can arise anytime (except in initial and connect modes)
+  def handleErrors: Receive = {
+    case Terminated(actor) if actor eq server =>
+      log.info("Connection expired ({})")
+      throw new ConnectionExpiredException
     case ev: Http.ConnectionClosed =>
-      log.debug("Connection closed ({})", ev)
-      context.stop(self)
-
-    case Http.CommandFailed(Http.Close) =>
-      log.warning("Could not close connection")
-      context.stop(self)
-
-    case _ =>
-      context.stop(self)
+      log.info("Connection closed by server ({})", ev)
+      throw new ConnectionClosedException(ev)
   }
 
-  private def switchToWaiting(server: ActorRef) {
-    val poison = system.scheduler.scheduleOnce(lifetime, self, Close)
-    context.become(waiting(poison, server))
+  private def setTimeout(delay: Duration) {
+    timeout = system.scheduler.scheduleOnce(delay, self, new PoolTimeoutException)
+  }
+
+  private def clearTimeout() {
+    timeout.cancel()
+  }
+
+  private def startTimeoutAndWaitForRequest {
+    setTimeout(lifetime)
+    context.become(waitForRequest)
   }
 }
 
 object ElbClientActor {
   def apply(destination: InetSocketAddress, lifetime: Duration, IOconnector: ActorRef) = new ElbClientActor(destination, lifetime, IOconnector)
 }
+
+/**
+ * Errors
+ */
+
+class InitialTimeoutException extends Exception
+
+// Thrown when the connection has been living too long and needs to be removed from pool
+class PoolTimeoutException extends Exception
+
+// Thrown whenever the connection is closed by the server, intentionally or not
+class ConnectionClosedException(command: Http.Event) extends Exception(command.toString)
+
+// Thrown whenever the connection is closed by the Spray connector (usually when timing out)
+class ConnectionExpiredException extends Exception
+
+class CommandFailedException(event: Http.Event) extends Exception(event.toString)
+
+class SendFailedException(event: Http.Event) extends Exception(event.toString)
+
+class RequestTimeoutException extends Exception

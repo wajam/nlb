@@ -1,17 +1,14 @@
 package com.wajam.elb
 
-import org.scalatest.{BeforeAndAfter, FunSuite}
+import java.net.InetSocketAddress
 import org.junit.runner.RunWith
+import org.scalatest.{BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
 import org.scalatest.mock.MockitoSugar
-import java.net.InetSocketAddress
-import akka.actor.{ActorSystem}
+import akka.actor.{Actor, ActorSystem}
 import akka.util.duration._
 import akka.testkit.TestActorRef
-import akka.io.Tcp
-import akka.actor.Actor
-import akka.util.Duration
 
 /**
  * User: Clément
@@ -32,15 +29,6 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   class DummyConnection extends Actor {
     def receive: Receive = {
       case _ =>
-    }
-  }
-
-  class DummyConnectionWithTimeout(lifetime: Duration) extends DummyConnection {
-    system.scheduler.scheduleOnce(lifetime, self, "die")
-
-    override def receive: Receive = {
-      case "die" =>
-        context stop self
     }
   }
 
@@ -81,33 +69,34 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   test("should expire connection after timeout") {
-    val timeout = 500
-
-    dummyConnectionRef = TestActorRef(new DummyConnectionWithTimeout(timeout milliseconds))
+    val timeout = 250
 
     pool = new SprayConnectionPool(timeout milliseconds, 1, system)
 
-    pool.poolConnection(destination, dummyConnectionRef)
+    val connectionRef = pool.getNewConnection(destination)
 
-    Thread.sleep(timeout * 2)
+    pool.poolConnection(destination, connectionRef)
+
+    Thread.sleep(timeout + 1)
 
     pool.getPooledConnection(destination) should equal (None)
   }
 
   test("should free a space in the pool once a pool connection expires") {
-    val timeout = 500
-
-    val dummyConnectionRefWithTimeout = TestActorRef(new DummyConnectionWithTimeout(timeout milliseconds))
+    val timeout = 250
 
     pool = new SprayConnectionPool(timeout milliseconds, 1, system)
 
-    pool.poolConnection(destination, dummyConnectionRefWithTimeout)
+    var connectionRef = pool.getNewConnection(destination)
 
-    Thread.sleep(timeout * 2)
+    pool.poolConnection(destination, connectionRef)
 
-    pool.getPooledConnection(destination) should equal (None)
+    Thread.sleep(timeout + 1)
 
-    pool.poolConnection(destination, dummyConnectionRef)
-    pool.getPooledConnection(destination) should equal (Some(dummyConnectionRef))
+    connectionRef = pool.getNewConnection(destination)
+
+    pool.poolConnection(destination, connectionRef)
+
+    pool.getPooledConnection(destination) should equal (Some(connectionRef))
   }
 }
