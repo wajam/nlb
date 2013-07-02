@@ -2,8 +2,8 @@ import sbt._
 import Keys._
 import com.typesafe.sbt.SbtStartScript
 
-object ElbBuild extends Build {
-  val PROJECT_NAME = "elb"
+object NlbBuild extends Build {
+  val PROJECT_NAME = "nlb"
 
   var commonResolvers = Seq(
     // local snapshot support
