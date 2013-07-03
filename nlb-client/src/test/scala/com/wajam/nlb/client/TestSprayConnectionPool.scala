@@ -20,7 +20,10 @@ import akka.testkit.TestActorRef
 class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoSugar {
   implicit val system = ActorSystem("TestSprayConnectionPool")
   val destination = new InetSocketAddress("127.0.0.1", 9999)
-  val timeout = 5000
+
+  val connectionIdleTimeout = 5000
+  val connectionInitialTimeout = 1000
+
   var pool: SprayConnectionPool = _
   var dummyConnectionActor: DummyConnection = _
   var dummyConnectionRef: TestActorRef[DummyConnection] = _
@@ -33,7 +36,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   before {
-    pool = new SprayConnectionPool(timeout milliseconds, 100, system)
+    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 100, system)
 
     dummyConnectionRef = TestActorRef(new DummyConnection)
     dummyConnectionActor = dummyConnectionRef.underlyingActor
@@ -47,14 +50,14 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   test("should reject if max size is reached") {
-    pool = new SprayConnectionPool(timeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
   }
 
   test("should allow if size less than maximum") {
-    pool = new SprayConnectionPool(timeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
@@ -71,7 +74,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   test("should expire connection after timeout") {
     val timeout = 250
 
-    pool = new SprayConnectionPool(timeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
     val connectionRef = pool.getNewConnection(destination)
 
@@ -85,7 +88,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   test("should free a space in the pool once a pool connection expires") {
     val timeout = 250
 
-    pool = new SprayConnectionPool(timeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
     var connectionRef = pool.getNewConnection(destination)
 

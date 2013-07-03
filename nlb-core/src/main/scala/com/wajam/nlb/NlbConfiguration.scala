@@ -43,8 +43,12 @@ class NlbConfiguration(config: Configuration) {
     config.getInt("nlb.client.timeout")
   }
 
-  def getConnectionPoolTimeOut: Int = {
-    config.getInt("nlb.connectionpool.timeout")
+  def getConnectionIdleTimeOut: Int = {
+    config.getInt("nlb.connection.idletimeout")
+  }
+
+  def getConnectionInitialTimeOut: Int = {
+    config.getInt("nlb.connection.initialtimeout")
   }
 
   def getConnectionPoolMaxSize: Int = {

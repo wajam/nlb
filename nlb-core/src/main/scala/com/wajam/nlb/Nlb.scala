@@ -24,7 +24,7 @@ object Nlb extends App {
                           config.getHttpPort,
                           config.getLocalNodePort)
 
-  val pool = new SprayConnectionPool(config.getConnectionPoolTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
+  val pool = new SprayConnectionPool(config.getConnectionIdleTimeOut milliseconds, config.getConnectionInitialTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
 
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(Props(ServerService(pool, router)), name = "ServerHandler")

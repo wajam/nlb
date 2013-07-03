@@ -49,10 +49,11 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
 /**
  * Connection pool
  *
- * @param timeout the maximum amount of time a connection should wait in the pool
+ * @param connectionIdleTimeout the maximum amount of time a connection should wait in the pool
  * @param maxSize the maximum amount of connections allowed in the pool
  */
-class SprayConnectionPool(timeout: Duration,
+class SprayConnectionPool(connectionIdleTimeout: Duration,
+                          connectionInitialTimeout: Duration,
                           maxSize: Int,
                           implicit val system: ActorSystem) {
   private val logger = LoggerFactory.getLogger("nlb.connectionpool.logger")
@@ -97,7 +98,7 @@ class SprayConnectionPool(timeout: Duration,
 
   // Get a new collection out of the pool
   def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    val future = poolSupervisor ? Props(ClientActor(destination, timeout, IO(Http)))
+    val future = poolSupervisor ? Props(ClientActor(destination, connectionIdleTimeout, connectionInitialTimeout, IO(Http)))
     Await.result(future, 200 milliseconds).asInstanceOf[ActorRef]
   }
 

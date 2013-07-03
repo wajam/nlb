@@ -18,12 +18,13 @@ import spray.can.client.ClientConnectionSettings
  * Actor handling an HTTP connection with a specific node.
  *
  * @param destination the destination node
- * @param lifetime the amount of time the connection is allowed to stay inactive
+ * @param idleTimeout the amount of time the connection is allowed to stay inactive
  * @param IOconnector the actor handling the underlying connection (usually IO(Http), except when testing)
  */
 class ClientActor(destination: InetSocketAddress,
-                     lifetime: Duration,
-                     IOconnector: ActorRef) extends Actor with SprayActorLogging {
+                  idleTimeout: Duration,
+                  initialTimeout: Duration,
+                  IOconnector: ActorRef) extends Actor with SprayActorLogging {
   import context.system
 
   var timeout: Cancellable = _
@@ -34,7 +35,7 @@ class ClientActor(destination: InetSocketAddress,
   var request: HttpRequest = _
 
   // Initial timeout
-  context.setReceiveTimeout(30 milliseconds)
+  context.setReceiveTimeout(initialTimeout)
   
   /**
    * Behaviours
@@ -50,7 +51,9 @@ class ClientActor(destination: InetSocketAddress,
 
       IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
 
-    case ReceiveTimeout => throw new InitialTimeoutException
+    case ReceiveTimeout =>
+      log.warning("Initial timeout")
+      throw new InitialTimeoutException
   }
 
   def connect: Receive = {
@@ -80,8 +83,8 @@ class ClientActor(destination: InetSocketAddress,
 
     case poolTimeout: PoolTimeoutException =>
       server ! Http.Close
+      log.warning("Closing connection and going out of the pool")
       throw poolTimeout
-      log.info("Closing connection and going out of the pool")
   }
 
   def waitForResponse: Receive = handleErrors orElse {
@@ -140,23 +143,30 @@ class ClientActor(destination: InetSocketAddress,
   }
 
   private def startTimeoutAndWaitForRequest {
-    setTimeout(lifetime)
+    setTimeout(idleTimeout)
     context.become(waitForRequest)
   }
 }
 
 object ClientActor {
-  def apply(destination: InetSocketAddress, lifetime: Duration, IOconnector: ActorRef) = new ClientActor(destination, lifetime, IOconnector)
+  def apply(destination: InetSocketAddress,
+            lifetime: Duration,
+            initialTimeout: Duration,
+            IOconnector: ActorRef) = new ClientActor(destination, lifetime, initialTimeout, IOconnector)
 }
 
 /**
  * Errors
  */
 
-class InitialTimeoutException extends Exception
+class InitialTimeoutException extends Exception {
+  override def toString = "InitialTimeoutException"
+}
 
 // Thrown when the connection has been living too long and needs to be removed from pool
-class PoolTimeoutException extends Exception
+class PoolTimeoutException extends Exception {
+  override def toString = "PoolTimeoutException"
+}
 
 // Thrown whenever the connection is closed by the server, intentionally or not
 class ConnectionClosedException(command: Http.Event) extends Exception(command.toString)
