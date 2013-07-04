@@ -20,14 +20,11 @@ import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk
 
 @RunWith(classOf[JUnitRunner])
 class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with FunSuite with BeforeAndAfter with BeforeAndAfterAll {
-  import system._
 
   implicit val askTimeout = Timeout(5 seconds)
 
   val clientIdleTimeout: Duration = 2 seconds
   val clientInitialTimeout: Duration = 1 second
-
-  val maxAwaitDone = 3 seconds
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
 
@@ -182,18 +179,20 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
         serverRef ! TellTo(clientRef, chunkEnd)
       }
     }
+    // Check that the response is forwarded
     expectMsgPF() {
-      // Check that the response is forwarded
       case RouterMessage(msg) if msg.isInstanceOf[ChunkedResponseStart] =>
+    }
+    expectMsgPF() {
       case RouterMessage(msg) if msg.isInstanceOf[MessageChunk] =>
+    }
+    expectMsgPF() {
       case RouterMessage(msg) if msg.isInstanceOf[ChunkedMessageEnd] =>
     }
   }
 
   test("should throw an InitialTimeoutException when creating an actor without feeding him with a request") {
-    EventFilter[InitialTimeoutException](occurrences = 1) intercept {
-      Thread.sleep(1)
-    }
+    EventFilter[InitialTimeoutException](occurrences = 1) intercept {}
   }
 
   test("should throw a PoolTimeoutException when waiting too long in waitingForRequest state") {
@@ -213,8 +212,6 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
       case RouterMessage(msg) if msg.isInstanceOf[HttpResponse] =>
     }
 
-    EventFilter[PoolTimeoutException](occurrences = 1) intercept {
-      Thread.sleep(1)
-    }
+    EventFilter[PoolTimeoutException](occurrences = 1) intercept {}
   }
 }
