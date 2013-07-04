@@ -19,6 +19,7 @@ import akka.dispatch.Await
 import akka.pattern.ask
 import org.slf4j.LoggerFactory
 import spray.can.Http
+import com.yammer.metrics.scala.Instrumented
 
 /**
  * Supervisor of all connection actors.
@@ -55,13 +56,25 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
 class SprayConnectionPool(connectionIdleTimeout: Duration,
                           connectionInitialTimeout: Duration,
                           maxSize: Int,
-                          implicit val system: ActorSystem) {
+                          implicit val system: ActorSystem) extends Instrumented {
   private val logger = LoggerFactory.getLogger("nlb.connectionpool.logger")
 
   implicit val askTimeout: Timeout = 200 milliseconds
 
   private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedQueue[ActorRef]] asScala
   private val currentNbPooledConnections = new AtomicInteger(0)
+
+  private val poolHitMeter = metrics.meter("connection-pool-hit", "hits")
+  private val poolMissMeter = metrics.meter("connection-pool-miss", "misses")
+  private val poolAddsMeter = metrics.meter("connection-pool-adds", "additions")
+  private val poolRemovesMeter = metrics.meter("connection-pool-removes", "removals")
+  private val connectionPooledDestinationsGauge = metrics.gauge("connection-pooled-destinations-size") {
+    connectionMap.size
+  }
+  private val connectionPoolSizeGauge = metrics.gauge("connection-pool-size") {
+    currentNbPooledConnections.longValue()
+  }
+  private val connectionPoolCreatesMeter = metrics.meter("connection-pool-creates", "creations")
 
   private val poolSupervisor = system.actorOf(Props(new PoolSupervisor(this)))
 
@@ -76,7 +89,9 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
         case Some(queue) =>
           queue
       }
-      queue.add(connection)
+      val added = queue.add(connection)
+      if(added) poolAddsMeter.mark()
+      added
     }
     else {
       currentNbPooledConnections.decrementAndGet()
@@ -85,20 +100,25 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
   }
 
   // Try to get a connection from the pool
-  def getPooledConnection(destination: InetSocketAddress): Option[ActorRef] = {
+  protected[client] def getPooledConnection(destination: InetSocketAddress): Option[ActorRef] = {
     connectionMap.get(destination) match {
       case Some(queue) =>
         val maybeConnection = Option(queue.poll())
-        if(!maybeConnection.isEmpty) markConnectionRemovedFromPool()
+        if(!maybeConnection.isEmpty) {
+          poolHitMeter.mark()
+          markConnectionRemovedFromPool()
+        }
         maybeConnection
       case _ =>
+        poolMissMeter.mark()
         None
     }
   }
 
   // Get a new collection out of the pool
-  def getNewConnection(destination: InetSocketAddress): ActorRef = {
+  protected[client] def getNewConnection(destination: InetSocketAddress): ActorRef = {
     val future = poolSupervisor ? Props(ClientActor(destination, connectionIdleTimeout, connectionInitialTimeout, IO(Http)))
+    connectionPoolCreatesMeter.mark()
     Await.result(future, 200 milliseconds).asInstanceOf[ActorRef]
   }
 
@@ -120,6 +140,7 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
     } match {
       case Some((_, _)) =>
         logger.info("Removed connection from pool")
+        poolRemovesMeter.mark()
         markConnectionRemovedFromPool()
       case _ =>
     }
