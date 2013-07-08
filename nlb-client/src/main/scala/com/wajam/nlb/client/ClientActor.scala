@@ -8,6 +8,7 @@ import spray.can.Http
 import spray.util.SprayActorLogging
 import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import spray.can.client.ClientConnectionSettings
+import com.yammer.metrics.scala.Instrumented
 
 /**
  * User: Clément
@@ -24,8 +25,19 @@ import spray.can.client.ClientConnectionSettings
 class ClientActor(destination: InetSocketAddress,
                   idleTimeout: Duration,
                   initialTimeout: Duration,
-                  IOconnector: ActorRef) extends Actor with SprayActorLogging {
+                  IOconnector: ActorRef) extends Actor with SprayActorLogging with Instrumented {
   import context.system
+
+  private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
+  private val connectionFailedMeter = metrics.meter("client-connection-failed", "fails")
+  private val sendFailedMeter = metrics.meter("client-send-failed", "fails")
+  private val requestTimeoutMeter = metrics.meter("client-request-timeout", "fails")
+  private val connectionExpiredMeter = metrics.meter("client-connection-expired", "expirations")
+  private val connectionClosedMeter = metrics.meter("client-connection-closed", "closings")
+  private val openConnectionsCounter = metrics.counter("client-open-connections", "connections")
+  private val poolTimeoutMeter = metrics.meter("client-pool-timeout", "timeouts")
+  private val chunkedResponsesMeter = metrics.meter("client-chunk-responses", "responses")
+  private val unchunkedResponsesMeter = metrics.meter("client-unchunk-responses", "responses")
 
   var timeout: Cancellable = _
   val defaultTimeout = 3 seconds
@@ -53,6 +65,7 @@ class ClientActor(destination: InetSocketAddress,
 
     case ReceiveTimeout =>
       log.warning("Initial timeout")
+      initialTimeoutsMeter.mark()
       throw new InitialTimeoutException
   }
 
@@ -62,12 +75,14 @@ class ClientActor(destination: InetSocketAddress,
       server = sender
       startTimeoutAndWaitForRequest
       self ! (router, request)
+      openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
       context.watch(server)
 
     case ev: Http.CommandFailed =>
       log.warning("Command failed ({})", ev)
+      connectionFailedMeter.mark()
       throw new CommandFailedException(ev)
   }
 
@@ -84,6 +99,7 @@ class ClientActor(destination: InetSocketAddress,
     case poolTimeout: PoolTimeoutException =>
       server ! Http.Close
       log.warning("Closing connection and going out of the pool")
+      poolTimeoutMeter.mark()
       throw poolTimeout
   }
 
@@ -92,21 +108,25 @@ class ClientActor(destination: InetSocketAddress,
     case responseStart: ChunkedResponseStart =>
       router ! responseStart
       context.become(streamResponse)
+      chunkedResponsesMeter.mark()
       log.info("Received a chunked response start")
 
     // Unchunked responses
     case response@ HttpResponse(status, entity, _, _) =>
       router ! response
       startTimeoutAndWaitForRequest
+      unchunkedResponsesMeter.mark()
       log.info("Received {} response with {} bytes", status, entity.buffer.length)
 
     // Specific errors
     case ev: Http.SendFailed =>
       log.warning("Send failed ({})", ev)
+      sendFailedMeter.mark()
       throw new SendFailedException(ev)
 
     case ev: Timedout =>
       log.warning("Received Timedout ({})", ev)
+      requestTimeoutMeter.mark()
       throw new RequestTimeoutException
   }
 
@@ -128,9 +148,11 @@ class ClientActor(destination: InetSocketAddress,
   def handleErrors: Receive = {
     case Terminated(actor) if actor eq server =>
       log.info("Connection expired ({})")
+      connectionExpiredMeter.mark()
       throw new ConnectionExpiredException
     case ev: Http.ConnectionClosed =>
       log.info("Connection closed by server ({})", ev)
+      connectionClosedMeter.mark()
       throw new ConnectionClosedException(ev)
   }
 
@@ -145,6 +167,10 @@ class ClientActor(destination: InetSocketAddress,
   private def startTimeoutAndWaitForRequest {
     setTimeout(idleTimeout)
     context.become(waitForRequest)
+  }
+
+  override def postStop {
+    openConnectionsCounter -= 1
   }
 }
 
