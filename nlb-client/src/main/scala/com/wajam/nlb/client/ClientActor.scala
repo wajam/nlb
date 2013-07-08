@@ -42,10 +42,10 @@ class ClientActor(destination: InetSocketAddress,
    */
 
   def receive =  {
-    case req: HttpRequest =>
+    case (newRouter: ActorRef, newRequest: HttpRequest) =>
       // start by establishing a new HTTP connection
-      router = sender
-      request = req
+      router = newRouter
+      request = newRequest
 
       context.become(connect)
 

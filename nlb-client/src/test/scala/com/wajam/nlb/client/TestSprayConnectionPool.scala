@@ -6,9 +6,12 @@ import org.scalatest.{BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
 import org.scalatest.mock.MockitoSugar
-import akka.actor.{Actor, ActorSystem}
+import akka.actor._
 import akka.util.duration._
 import akka.testkit.TestActorRef
+import akka.dispatch.Await
+import akka.pattern.ask
+import akka.util.Timeout
 
 /**
  * User: Clément
@@ -49,6 +52,14 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
     connection should equal (dummyConnectionRef)
   }
 
+  test("should be empty after removing only connection") {
+    pool.poolConnection(destination, dummyConnectionRef)
+
+    pool.remove(dummyConnectionRef)
+
+    pool.getPooledConnection(destination) should equal (None)
+  }
+
   test("should reject if max size is reached") {
     pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
@@ -70,36 +81,59 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   test("should return None if empty") {
     pool.getPooledConnection(destination) should equal (None)
   }
+}
 
-  test("should expire connection after timeout") {
-    val timeout = 250
+@RunWith(classOf[JUnitRunner])
+class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
 
-    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
+  implicit var system: ActorSystem = _
+  val destination = new InetSocketAddress("127.0.0.1", 9999)
 
-    val connectionRef = pool.getNewConnection(destination)
+  implicit val askTimeout: Timeout = 200 milliseconds
 
-    pool.poolConnection(destination, connectionRef)
+  val connectionIdleTimeout = 5000
+  val connectionInitialTimeout = 1000
 
-    Thread.sleep(timeout + 1)
+  var pool: SprayConnectionPool = _
+  var connectionActor: Actor = _
 
-    pool.getPooledConnection(destination) should equal (None)
+  var connectionRef: TestActorRef[ConnectionMockActor] = _
+
+  var poolSupervisorRef: TestActorRef[PoolSupervisor] = _
+
+  class ConnectionMockActor extends Actor {
+    def receive: Receive = {
+      case e: Exception =>
+        throw e
+    }
   }
 
-  test("should free a space in the pool once a pool connection expires") {
-    val timeout = 250
+  before {
+    system = ActorSystem("TestPoolSupervisor")
 
     pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
 
-    var connectionRef = pool.getNewConnection(destination)
+    poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
+
+    connectionRef = TestActorRef(Props(new ConnectionMockActor), poolSupervisorRef, "connection-mock-actor")
 
     pool.poolConnection(destination, connectionRef)
+  }
 
-    Thread.sleep(timeout + 1)
+  after {
+    system.shutdown()
+    system.awaitTermination()
+  }
 
-    connectionRef = pool.getNewConnection(destination)
+  test("should kill a connection once it throws an exception") {
+    connectionRef ! new Exception
 
-    pool.poolConnection(destination, connectionRef)
+    connectionRef.isTerminated should equal (true)
+  }
 
-    pool.getPooledConnection(destination) should equal (Some(connectionRef))
+  test("should remove a connection from the pool once it dies") {
+    poolSupervisorRef.receive(Terminated(connectionRef))
+
+    pool.getPooledConnection(destination) should equal (None)
   }
 }

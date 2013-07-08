@@ -91,6 +91,7 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
       }
       val added = queue.add(connection)
       if(added) poolAddsMeter.mark()
+      else currentNbPooledConnections.decrementAndGet()
       added
     }
     else {
@@ -104,9 +105,12 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
     connectionMap.get(destination) match {
       case Some(queue) =>
         val maybeConnection = Option(queue.poll())
-        if(!maybeConnection.isEmpty) {
-          poolHitMeter.mark()
-          markConnectionRemovedFromPool()
+        maybeConnection match {
+          case Some(connection) =>
+            poolHitMeter.mark()
+            markConnectionRemovedFromPool()
+          case _ =>
+            poolMissMeter.mark()
         }
         maybeConnection
       case _ =>
@@ -143,6 +147,7 @@ class SprayConnectionPool(connectionIdleTimeout: Duration,
         poolRemovesMeter.mark()
         markConnectionRemovedFromPool()
       case _ =>
+        logger.info("Could not find connection in pool")
     }
   }
 

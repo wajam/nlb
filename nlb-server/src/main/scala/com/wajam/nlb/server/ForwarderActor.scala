@@ -24,13 +24,13 @@ class ForwarderActor(pool: SprayConnectionPool,
 
   val destination = router.resolve(request.uri.path.toString)
 
-  log.info("Routing to node {}...", destination.toString)
-
   // clientActor is the actor handling the connection with the server
   // Not to be mistaken with client, which is *our* client
   val clientActor = pool.getConnection(destination)
 
-  clientActor ! request
+  log.info("Routing to node {} using connection {}", destination.toString, clientActor.toString)
+
+  clientActor ! (self, request)
 
   def receive = {
     // Transmission finished, stop the router and pool the connection
