@@ -4,7 +4,7 @@ import akka.actor.{ActorSystem, Props}
 import akka.io.IO
 import akka.util.duration._
 import spray.can.Http
-import com.wajam.nlb.server.{ForwarderActor, ServerService}
+import com.wajam.nlb.server.{ForwarderActor, ServerActor}
 import com.wajam.nlb.client.{SprayConnectionPool, ClientActor}
 
 /**
@@ -27,7 +27,7 @@ object Nlb extends App {
   val pool = new SprayConnectionPool(config.getConnectionIdleTimeOut milliseconds, config.getConnectionInitialTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
 
   // the handler actor replies to incoming HttpRequests
-  val handler = system.actorOf(Props(ServerService(pool, router)), name = "ServerHandler")
+  val handler = system.actorOf(Props(ServerActor(pool, router)), name = "ServerHandler")
 
   IO(Http) ! Http.Bind(handler, interface = "localhost", port = 8080)
 
