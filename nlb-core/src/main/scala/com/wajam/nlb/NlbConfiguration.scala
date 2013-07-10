@@ -54,6 +54,26 @@ class NlbConfiguration(config: Configuration) {
   def getConnectionPoolMaxSize: Int = {
     config.getInt("nlb.connectionpool.maxsize")
   }
+
+  def isTraceEnabled: Boolean = {
+    config.getBoolean("nlb.trace.enabled", true)
+  }
+
+  def getTraceRecorder: String = {
+    config.getString("nlb.trace.recorder", "console")
+  }
+
+  def getTraceScribeHost: String = {
+    config.getString("nlb.trace.scribe.host", "localhost")
+  }
+
+  def getTraceScribePort: Int = {
+    config.getInt("nlb.trace.scribe.port", 1463)
+  }
+
+  def getTraceScribeSamplingRate: Int = {
+    config.getInt("nlb.trace.scribe.sampling_rate", 1000)
+  }
 }
 
 object NlbConfiguration {

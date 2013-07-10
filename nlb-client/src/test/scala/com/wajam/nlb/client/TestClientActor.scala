@@ -11,6 +11,7 @@ import akka.util.{Timeout, Duration}
 import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
+import com.wajam.nrv.tracing.{Tracer, NullTraceRecorder}
 
 /**
  * User: Clément
@@ -22,6 +23,8 @@ import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk
 class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with FunSuite with BeforeAndAfter with BeforeAndAfterAll {
 
   implicit val askTimeout = Timeout(5 seconds)
+
+  implicit val tracer = new Tracer(NullTraceRecorder)
 
   val clientIdleTimeout: Duration = 2 seconds
   val clientInitialTimeout: Duration = 1 second

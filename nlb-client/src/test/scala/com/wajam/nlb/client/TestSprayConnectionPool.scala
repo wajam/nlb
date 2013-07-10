@@ -12,6 +12,7 @@ import akka.testkit.TestActorRef
 import akka.dispatch.Await
 import akka.pattern.ask
 import akka.util.Timeout
+import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
 
 /**
  * User: Clément
@@ -21,6 +22,8 @@ import akka.util.Timeout
 
 @RunWith(classOf[JUnitRunner])
 class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoSugar {
+  implicit val tracer = new Tracer(NullTraceRecorder)
+
   implicit val system = ActorSystem("TestSprayConnectionPool")
   val destination = new InetSocketAddress("127.0.0.1", 9999)
 
@@ -85,6 +88,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
 
 @RunWith(classOf[JUnitRunner])
 class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
+  implicit val tracer = new Tracer(NullTraceRecorder)
 
   implicit var system: ActorSystem = _
   val destination = new InetSocketAddress("127.0.0.1", 9999)

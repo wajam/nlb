@@ -6,9 +6,11 @@ import akka.util.duration._
 import akka.util.Duration
 import spray.can.Http
 import spray.util.SprayActorLogging
-import spray.http.{Timedout, HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
+import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
+import com.wajam.nrv.tracing.{TraceContext, RpcName, Annotation, Tracer}
+import com.wajam.nlb.TracedRequest
 
 /**
  * User: Clément
@@ -25,7 +27,7 @@ import com.yammer.metrics.scala.Instrumented
 class ClientActor(destination: InetSocketAddress,
                   idleTimeout: Duration,
                   initialTimeout: Duration,
-                  IOconnector: ActorRef) extends Actor with SprayActorLogging with Instrumented {
+                  IOconnector: ActorRef)(implicit tracer: Tracer) extends Actor with SprayActorLogging with Instrumented {
   import context.system
 
   private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
@@ -44,7 +46,7 @@ class ClientActor(destination: InetSocketAddress,
 
   var router: ActorRef = _
   var server: ActorRef = _
-  var request: HttpRequest = _
+  var request: TracedRequest = _
 
   // Initial timeout
   context.setReceiveTimeout(initialTimeout)
@@ -54,10 +56,10 @@ class ClientActor(destination: InetSocketAddress,
    */
 
   def receive =  {
-    case (newRouter: ActorRef, newRequest: HttpRequest) =>
+    case (router: ActorRef, request: TracedRequest) =>
       // start by establishing a new HTTP connection
-      router = newRouter
-      request = newRequest
+      this.router = router
+      this.request = request
 
       context.become(connect)
 
@@ -88,12 +90,21 @@ class ClientActor(destination: InetSocketAddress,
 
   def waitForRequest: Receive = handleErrors orElse {
     // Already connected, new request to send
-    case (newRouter: ActorRef, request: HttpRequest) =>
+    case (newRouter: ActorRef, request: TracedRequest) =>
       clearTimeout()
       // Bind the new router
       router = newRouter
-      server ! request
-      context.become(waitForResponse)
+
+      val subContext = request.context.map { context => tracer.createSubcontext(context) }
+
+      tracer.trace(subContext) {
+        tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
+        tracer.record(Annotation.ClientAddress(request.address))
+      }
+
+      server ! request.withNewContext(subContext).get
+
+      context.become(waitForResponse(subContext))
       log.info("Received a new request to send")
 
     case poolTimeout: PoolTimeoutException =>
@@ -103,17 +114,27 @@ class ClientActor(destination: InetSocketAddress,
       throw poolTimeout
   }
 
-  def waitForResponse: Receive = handleErrors orElse {
+  def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
     // Chunked responses
     case responseStart: ChunkedResponseStart =>
       router ! responseStart
-      context.become(streamResponse)
+
+      tracer.trace(subContext) {
+        tracer.record(Annotation.Message("First chunk received"))
+      }
+
+      context.become(streamResponse(subContext))
       chunkedResponsesMeter.mark()
       log.info("Received a chunked response start")
 
     // Unchunked responses
     case response@ HttpResponse(status, entity, _, _) =>
       router ! response
+
+      tracer.trace(subContext) {
+        tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
+      }
+
       startTimeoutAndWaitForRequest
       unchunkedResponsesMeter.mark()
       log.info("Received {} response with {} bytes", status, entity.buffer.length)
@@ -130,13 +151,18 @@ class ClientActor(destination: InetSocketAddress,
       throw new RequestTimeoutException
   }
 
-  def streamResponse: Receive = handleErrors orElse {
+  def streamResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       router ! chunk
       log.info("Received a chunk")
 
     case responseEnd: ChunkedMessageEnd =>
       router ! responseEnd
+
+      tracer.trace(subContext) {
+        tracer.record(Annotation.ClientRecv(None))
+      }
+
       startTimeoutAndWaitForRequest
       log.info("Received a chunked response end")
   }
@@ -178,7 +204,7 @@ object ClientActor {
   def apply(destination: InetSocketAddress,
             lifetime: Duration,
             initialTimeout: Duration,
-            IOconnector: ActorRef) = new ClientActor(destination, lifetime, initialTimeout, IOconnector)
+            IOconnector: ActorRef)(implicit tracer: Tracer) = new ClientActor(destination, lifetime, initialTimeout, IOconnector)
 }
 
 /**

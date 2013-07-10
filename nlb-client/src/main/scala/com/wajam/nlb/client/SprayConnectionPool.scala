@@ -20,6 +20,7 @@ import akka.pattern.ask
 import org.slf4j.LoggerFactory
 import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
+import com.wajam.nrv.tracing.Tracer
 
 /**
  * Supervisor of all connection actors.
@@ -56,7 +57,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
 class SprayConnectionPool(connectionIdleTimeout: Duration,
                           connectionInitialTimeout: Duration,
                           maxSize: Int,
-                          implicit val system: ActorSystem) extends Instrumented {
+                          implicit val system: ActorSystem)(implicit tracer: Tracer) extends Instrumented {
   private val logger = LoggerFactory.getLogger("nlb.connectionpool.logger")
 
   implicit val askTimeout: Timeout = 200 milliseconds

@@ -1,11 +1,11 @@
 package com.wajam.nlb.server
 
-import akka.util.{Timeout}
-import akka.actor.{Actor, ActorRef, Status, Props}
+import akka.actor.{Actor, ActorRef, Status}
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import spray.util.SprayActorLogging
-import com.wajam.nlb.{Router}
+import com.wajam.nrv.tracing.{Annotation, Tracer}
+import com.wajam.nlb.{TracedRequest, Router}
 import com.wajam.nlb.client.SprayConnectionPool
 
 /**
@@ -16,19 +16,24 @@ import com.wajam.nlb.client.SprayConnectionPool
 
 class ForwarderActor(pool: SprayConnectionPool,
                      client: ActorRef,
-                     request: HttpRequest,
-                     router: Router)
-  extends Actor with SprayActorLogging {
+                     request: TracedRequest,
+                     router: Router)(implicit tracer: Tracer)
+    extends Actor
+    with SprayActorLogging {
 
   log.info("Starting forwarding response for {}...", request)
 
-  val destination = router.resolve(request.uri.path.toString)
+  val destination = tracer.trace(request.context) {
+    tracer.time("Resolving destination") {
+      router.resolve(request.path)
+    }
+  }
 
   // clientActor is the actor handling the connection with the server
   // Not to be mistaken with client, which is *our* client
   val clientActor = pool.getConnection(destination)
 
-  log.info("Routing to node {} using connection {}", destination.toString, clientActor.toString)
+  log.info("Routing to node {} using connection {}", destination, clientActor)
 
   clientActor ! (self, request)
 
@@ -36,6 +41,11 @@ class ForwarderActor(pool: SprayConnectionPool,
     // Transmission finished, stop the router and pool the connection
     case response: HttpResponse =>
       client ! response
+
+      tracer.trace(request.context) {
+        tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
+      }
+
       if(!response.connectionCloseExpected) {
         log.info("Pooling connection")
         pool.poolConnection(destination, clientActor)
@@ -44,11 +54,23 @@ class ForwarderActor(pool: SprayConnectionPool,
 
     case chunkEnd: ChunkedMessageEnd =>
       client ! chunkEnd
+
+      tracer.trace(request.context) {
+        tracer.record(Annotation.ServerSend(None))
+      }
+
       if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose ⇒ true; case _ ⇒ false }) {
         log.info("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
       context.stop(self)
+
+    case responseStart: ChunkedResponseStart =>
+      client ! responseStart
+
+      tracer.trace(request.context) {
+        tracer.record(Annotation.Message("First chunk sent"))
+      }
 
     // Error or connection successfully closed, stop the router without pooling the connection
     case Status.Failure | Status.Success =>
@@ -61,5 +83,5 @@ class ForwarderActor(pool: SprayConnectionPool,
 
 object ForwarderActor {
 
-  def apply(pool: SprayConnectionPool, client: ActorRef, request: HttpRequest, router: Router) = new ForwarderActor(pool, client, request, router)
+  def apply(pool: SprayConnectionPool, client: ActorRef, message: TracedRequest, router: Router)(implicit tracer: Tracer) = new ForwarderActor(pool, client, message, router)
 }

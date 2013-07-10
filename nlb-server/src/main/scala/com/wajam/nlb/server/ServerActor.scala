@@ -4,34 +4,43 @@ import akka.actor._
 import spray.can.Http
 import spray.util._
 import spray.http._
-import com.wajam.nlb.Router
+import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
+import com.wajam.nlb.{TracedRequest, Router}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.yammer.metrics.scala.Instrumented
-
 
 /**
  * User: Clément
  * Date: 2013-06-12
  */
 
-class ServerActor(pool: SprayConnectionPool, router: Router) extends Actor
-                                                             with SprayActorLogging
-                                                             with Instrumented {
+class ServerActor(pool: SprayConnectionPool, router: Router)(implicit tracer: Tracer)
+  extends Actor
+  with SprayActorLogging
+  with Instrumented {
 
-  private val incomingRequestsTimer = metrics.meter("server-incoming-requests", "requests")
+  private val incomingRequestsMeter = metrics.meter("server-incoming-requests", "requests")
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
     case _: Http.Connected => sender ! Http.Register(self)
 
-    case request: HttpRequest =>
+    case req: HttpRequest =>
       val client = sender
+      val request = TracedRequest(req)
+
       context actorOf Props(ForwarderActor(pool, client, request, router))
-      incomingRequestsTimer.mark()
+
+      tracer.trace(request.context) {
+        tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", request.method, request.path)))
+        tracer.record(Annotation.ServerAddress(request.address))
+      }
+
+      incomingRequestsMeter.mark()
   }
 }
 
 object ServerActor {
 
-  def apply(pool: SprayConnectionPool, router: Router) = new ServerActor(pool, router)
+  def apply(pool: SprayConnectionPool, router: Router)(implicit tracer: Tracer) = new ServerActor(pool, router)
 }
