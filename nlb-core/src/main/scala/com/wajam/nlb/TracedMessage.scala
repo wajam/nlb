@@ -44,10 +44,10 @@ trait TracedMessageFactory[T <: HttpMessage] {
 
     @tailrec
     def extractContext(headers: List[HttpHeader], context: TraceContext): TraceContext = {
-      val TraceId = TraceHeader.TraceId.toString
-      val SpanId = TraceHeader.SpanId.toString
-      val ParentId = TraceHeader.ParentId.toString
-      val Sampled = TraceHeader.Sampled.toString
+      val TraceId = TraceHeader.TraceId.toString.toLowerCase
+      val SpanId = TraceHeader.SpanId.toString.toLowerCase
+      val ParentId = TraceHeader.ParentId.toString.toLowerCase
+      val Sampled = TraceHeader.Sampled.toString.toLowerCase
 
       headers match {
         case Nil =>
