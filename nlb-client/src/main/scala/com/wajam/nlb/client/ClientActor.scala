@@ -123,7 +123,7 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.Message("First chunk received"))
       }
 
-      context.become(streamResponse(subContext))
+      context.become(streamResponse(subContext, responseStart.response.status.intValue))
       chunkedResponsesMeter.mark()
       log.info("Received a chunked response start")
 
@@ -151,7 +151,7 @@ class ClientActor(destination: InetSocketAddress,
       throw new RequestTimeoutException
   }
 
-  def streamResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
+  def streamResponse(subContext: Option[TraceContext], statusCode: Int): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       router ! chunk
       log.info("Received a chunk")
@@ -160,7 +160,7 @@ class ClientActor(destination: InetSocketAddress,
       router ! responseEnd
 
       tracer.trace(subContext) {
-        tracer.record(Annotation.ClientRecv(None))
+        tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
 
       startTimeoutAndWaitForRequest
