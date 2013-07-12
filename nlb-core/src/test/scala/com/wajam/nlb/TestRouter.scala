@@ -1,5 +1,6 @@
 package com.wajam.nlb
 
+import com.typesafe.config._
 import org.scalatest.{PrivateMethodTester, BeforeAndAfter, FunSuite}
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
@@ -15,12 +16,12 @@ import scala.util.matching.Regex
 @RunWith(classOf[JUnitRunner])
 class TestRouter extends FunSuite with BeforeAndAfter with PrivateMethodTester {
 
-  val config = NlbConfiguration.fromSystemProperties
+  val config = new NlbConfiguration(ConfigFactory.load())
 
   val router = new Router(Nil,
                           config.getZookeeperServers,
                           config.getResolvingService,
-                          config.getHttpPort,
+                          config.getNodeHttpPort,
                           config.getLocalNodePort)
 
   val fixture = {

@@ -8,6 +8,7 @@ import com.wajam.nlb.server.ServerActor
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nrv.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
 import com.wajam.nrv.scribe.ScribeTraceRecorder
+import com.typesafe.config.ConfigFactory
 
 /**
  * User: Clément
@@ -18,7 +19,7 @@ object Nlb extends App {
 
   implicit val system = ActorSystem("nlb")
 
-  implicit val config = NlbConfiguration.fromSystemProperties
+  implicit val config = new NlbConfiguration(ConfigFactory.load())
 
   val traceRecorder = if(config.isTraceEnabled) {
     config.getTraceRecorder match {
@@ -39,10 +40,10 @@ object Nlb extends App {
   val router = new Router(config.getKnownPaths,
                           config.getZookeeperServers,
                           config.getResolvingService,
-                          config.getHttpPort,
+                          config.getNodeHttpPort,
                           config.getLocalNodePort)
 
-  val pool = new SprayConnectionPool(config.getConnectionIdleTimeOut milliseconds, config.getConnectionInitialTimeOut milliseconds, config.getConnectionPoolMaxSize, system)
+  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, system)
 
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(Props(ServerActor(pool, router)), name = "ServerHandler")

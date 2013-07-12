@@ -102,7 +102,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     connectorRef = TestActorRef(new ConnectorProxyActor, "connector")
     connector = connectorRef.underlyingActor
 
-    clientRef = TestActorRef(ClientActor(destination, clientIdleTimeout, clientInitialTimeout, connectorRef), "client")
+    clientRef = TestActorRef(ClientActor(destination, clientInitialTimeout, connectorRef), "client")
     client = clientRef.underlyingActor
 
     routerRef = TestActorRef(new RouterProxyActor, "router")
@@ -215,6 +215,6 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
       case RouterMessage(msg) if msg.isInstanceOf[HttpResponse] =>
     }
 
-    EventFilter[PoolTimeoutException](occurrences = 1) intercept {}
+    EventFilter[ConnectionExpiredException](occurrences = 1) intercept {}
   }
 }

@@ -6,89 +6,55 @@ package com.wajam.nlb
  * Time: 09:50
  */
 
-import org.apache.commons.configuration.tree.OverrideCombiner
-import org.apache.commons.configuration.{Configuration, PropertiesConfiguration, CombinedConfiguration}
+import com.typesafe.config._
 import scala.collection.JavaConversions._
 
-class NlbConfiguration(config: Configuration) {
+class NlbConfiguration(config: Config) {
   def getZookeeperServers: String = {
-    config.getString("nlb.zookeeper.servers")
+    config.getString("nlb.resolving.zookeeper-servers")
   }
 
   def getResolvingService: String = {
     config.getString("nlb.resolving.service")
   }
 
-  def getHttpPort: Int = {
-    config.getInt("nlb.http.port")
+  def getNodeHttpPort: Int = {
+    config.getInt("nlb.node.http-port")
   }
 
   def getLocalNodePort: Int = {
-    config.getInt("nlb.localnode.port")
+    config.getInt("nlb.resolving.localnode-port")
   }
 
   def getKnownPaths: List[String] = {
-    config.getList("nlb.knownpaths").toList.asInstanceOf[List[String]]
+    config.getStringList("nlb.known-paths").toList
   }
 
-  def getServerTimeout: Int = {
-    config.getInt("nlb.server.timeout")
-  }
-
-  def getRouterTimeout: Int = {
-    config.getInt("nlb.router.timeout")
-  }
-
-  def getClientTimeout: Int = {
-    config.getInt("nlb.client.timeout")
-  }
-
-  def getConnectionIdleTimeOut: Int = {
-    config.getInt("nlb.connection.idletimeout")
-  }
-
-  def getConnectionInitialTimeOut: Int = {
-    config.getInt("nlb.connection.initialtimeout")
+  def getClientInitialTimeout: Long = {
+    config.getMilliseconds("nlb.client.initial-timeout")
   }
 
   def getConnectionPoolMaxSize: Int = {
-    config.getInt("nlb.connectionpool.maxsize")
+    config.getInt("nlb.connection-pool.max-size")
   }
 
   def isTraceEnabled: Boolean = {
-    config.getBoolean("nlb.trace.enabled", true)
+    config.getBoolean("nlb.trace.enabled")
   }
 
   def getTraceRecorder: String = {
-    config.getString("nlb.trace.recorder", "console")
+    config.getString("nlb.trace.recorder")
   }
 
   def getTraceScribeHost: String = {
-    config.getString("nlb.trace.scribe.host", "localhost")
+    config.getString("nlb.trace.scribe.host")
   }
 
   def getTraceScribePort: Int = {
-    config.getInt("nlb.trace.scribe.port", 1463)
+    config.getInt("nlb.trace.scribe.port")
   }
 
   def getTraceScribeSamplingRate: Int = {
-    config.getInt("nlb.trace.scribe.sampling_rate", 1000)
-  }
-}
-
-object NlbConfiguration {
-  def fromSystemProperties: NlbConfiguration = {
-    val confPath = System.getProperty("nlb.config")
-
-    val config = new CombinedConfiguration(new OverrideCombiner())
-
-    if(confPath != null) {
-      val envConfig = new PropertiesConfiguration(confPath)
-      config.addConfiguration(envConfig)
-    }
-
-    val defaultConfig = new PropertiesConfiguration("etc/nlb.properties")
-    config.addConfiguration(defaultConfig)
-    new NlbConfiguration(config)
+    config.getInt("nlb.trace.scribe.sampling-rate")
   }
 }

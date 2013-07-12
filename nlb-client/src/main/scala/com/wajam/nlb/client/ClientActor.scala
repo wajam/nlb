@@ -21,11 +21,9 @@ import com.wajam.nlb.TracedRequest
  * Actor handling an HTTP connection with a specific node.
  *
  * @param destination the destination node
- * @param idleTimeout the amount of time the connection is allowed to stay inactive
  * @param IOconnector the actor handling the underlying connection (usually IO(Http), except when testing)
  */
 class ClientActor(destination: InetSocketAddress,
-                  idleTimeout: Duration,
                   initialTimeout: Duration,
                   IOconnector: ActorRef)(implicit tracer: Tracer) extends Actor with SprayActorLogging with Instrumented {
   import context.system
@@ -75,7 +73,7 @@ class ClientActor(destination: InetSocketAddress,
     case _: Http.Connected =>
       // once connected, we can send the request across the connection
       server = sender
-      startTimeoutAndWaitForRequest
+      context.become(waitForRequest)
       self ! (router, request)
       openConnectionsCounter += 1
 
@@ -91,7 +89,6 @@ class ClientActor(destination: InetSocketAddress,
   def waitForRequest: Receive = handleErrors orElse {
     // Already connected, new request to send
     case (newRouter: ActorRef, request: TracedRequest) =>
-      clearTimeout()
       // Bind the new router
       router = newRouter
 
@@ -106,12 +103,6 @@ class ClientActor(destination: InetSocketAddress,
 
       context.become(waitForResponse(subContext))
       log.info("Received a new request to send")
-
-    case poolTimeout: PoolTimeoutException =>
-      server ! Http.Close
-      log.warning("Closing connection and going out of the pool")
-      poolTimeoutMeter.mark()
-      throw poolTimeout
   }
 
   def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
@@ -135,7 +126,7 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
       }
 
-      startTimeoutAndWaitForRequest
+      context.become(waitForRequest)
       unchunkedResponsesMeter.mark()
       log.info("Received {} response with {} bytes", status, entity.buffer.length)
 
@@ -163,7 +154,7 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
 
-      startTimeoutAndWaitForRequest
+      context.become(waitForRequest)
       log.info("Received a chunked response end")
   }
 
@@ -182,19 +173,6 @@ class ClientActor(destination: InetSocketAddress,
       throw new ConnectionClosedException(ev)
   }
 
-  private def setTimeout(delay: Duration) {
-    timeout = system.scheduler.scheduleOnce(delay, self, new PoolTimeoutException)
-  }
-
-  private def clearTimeout() {
-    timeout.cancel()
-  }
-
-  private def startTimeoutAndWaitForRequest {
-    setTimeout(idleTimeout)
-    context.become(waitForRequest)
-  }
-
   override def postStop {
     openConnectionsCounter -= 1
   }
@@ -202,9 +180,8 @@ class ClientActor(destination: InetSocketAddress,
 
 object ClientActor {
   def apply(destination: InetSocketAddress,
-            lifetime: Duration,
             initialTimeout: Duration,
-            IOconnector: ActorRef)(implicit tracer: Tracer) = new ClientActor(destination, lifetime, initialTimeout, IOconnector)
+            IOconnector: ActorRef)(implicit tracer: Tracer) = new ClientActor(destination, initialTimeout, IOconnector)
 }
 
 /**
@@ -213,11 +190,6 @@ object ClientActor {
 
 class InitialTimeoutException extends Exception {
   override def toString = "InitialTimeoutException"
-}
-
-// Thrown when the connection has been living too long and needs to be removed from pool
-class PoolTimeoutException extends Exception {
-  override def toString = "PoolTimeoutException"
 }
 
 // Thrown whenever the connection is closed by the server, intentionally or not

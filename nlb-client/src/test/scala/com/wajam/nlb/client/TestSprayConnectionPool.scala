@@ -9,8 +9,6 @@ import org.scalatest.mock.MockitoSugar
 import akka.actor._
 import akka.util.duration._
 import akka.testkit.TestActorRef
-import akka.dispatch.Await
-import akka.pattern.ask
 import akka.util.Timeout
 import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
 
@@ -42,7 +40,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   before {
-    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 100, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 100, system)
 
     dummyConnectionRef = TestActorRef(new DummyConnection)
     dummyConnectionActor = dummyConnectionRef.underlyingActor
@@ -64,14 +62,14 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   test("should reject if max size is reached") {
-    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, system)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
   }
 
   test("should allow if size less than maximum") {
-    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, system)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
@@ -115,7 +113,7 @@ class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
   before {
     system = ActorSystem("TestPoolSupervisor")
 
-    pool = new SprayConnectionPool(connectionIdleTimeout milliseconds, connectionInitialTimeout milliseconds, 1, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, system)
 
     poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
 

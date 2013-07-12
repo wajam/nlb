@@ -1,6 +1,6 @@
 # Local configuration
-etc/nlb.properties
-etc/test.properties
+etc/nlb.conf
+etc/test.conf
 
 
 # IDE generated files #
