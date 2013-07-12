@@ -55,10 +55,11 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
  */
 class SprayConnectionPool(connectionInitialTimeout: Duration,
                           maxSize: Int,
+                          askTimeout: Long,
                           implicit val system: ActorSystem)(implicit tracer: Tracer) extends Instrumented {
   private val logger = LoggerFactory.getLogger("nlb.connectionpool.logger")
 
-  implicit val askTimeout: Timeout = 200 milliseconds
+  implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
   private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedQueue[ActorRef]] asScala
   private val currentNbPooledConnections = new AtomicInteger(0)
@@ -122,7 +123,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
   protected[client] def getNewConnection(destination: InetSocketAddress): ActorRef = {
     val future = poolSupervisor ? Props(ClientActor(destination, connectionInitialTimeout, IO(Http)))
     connectionPoolCreatesMeter.mark()
-    Await.result(future, 200 milliseconds).asInstanceOf[ActorRef]
+    Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
   }
 
   // Get a pooled connection if available, otherwise get a new one

@@ -26,6 +26,10 @@ class NlbConfiguration(config: Config) {
     config.getInt("nlb.resolving.localnode-port")
   }
 
+  def getAskTimeout: Long = {
+    config.getMilliseconds("nlb.ask-timeout")
+  }
+
   def getKnownPaths: List[String] = {
     config.getStringList("nlb.known-paths").toList
   }
