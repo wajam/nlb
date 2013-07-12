@@ -35,12 +35,8 @@ class ClientActor(destination: InetSocketAddress,
   private val connectionExpiredMeter = metrics.meter("client-connection-expired", "expirations")
   private val connectionClosedMeter = metrics.meter("client-connection-closed", "closings")
   private val openConnectionsCounter = metrics.counter("client-open-connections", "connections")
-  private val poolTimeoutMeter = metrics.meter("client-pool-timeout", "timeouts")
   private val chunkedResponsesMeter = metrics.meter("client-chunk-responses", "responses")
   private val unchunkedResponsesMeter = metrics.meter("client-unchunk-responses", "responses")
-
-  var timeout: Cancellable = _
-  val defaultTimeout = 3 seconds
 
   var router: ActorRef = _
   var server: ActorRef = _
@@ -171,10 +167,6 @@ class ClientActor(destination: InetSocketAddress,
       log.info("Connection closed by server ({})", ev)
       connectionClosedMeter.mark()
       throw new ConnectionClosedException(ev)
-  }
-
-  override def postStop {
-    openConnectionsCounter -= 1
   }
 }
 
