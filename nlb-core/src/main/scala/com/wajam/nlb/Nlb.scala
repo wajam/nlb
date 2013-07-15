@@ -2,7 +2,7 @@ package com.wajam.nlb
 
 import akka.actor.{ActorSystem, Props}
 import akka.io.IO
-import akka.util.duration._
+import scala.concurrent.duration._
 import spray.can.Http
 import com.wajam.nlb.server.ServerActor
 import com.wajam.nlb.client.SprayConnectionPool

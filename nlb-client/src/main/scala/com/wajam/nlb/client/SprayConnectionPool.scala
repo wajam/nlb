@@ -13,9 +13,9 @@ import java.net.InetSocketAddress
 import akka.io.IO
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import akka.util.{Timeout, Duration}
-import akka.util.duration._
-import akka.dispatch.Await
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import akka.util.Timeout
 import akka.pattern.ask
 import org.slf4j.LoggerFactory
 import spray.can.Http

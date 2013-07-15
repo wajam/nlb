@@ -2,8 +2,7 @@ package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
 import akka.actor._
-import akka.util.duration._
-import akka.util.Duration
+import scala.concurrent.duration._
 import spray.can.Http
 import spray.util.SprayActorLogging
 import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
@@ -49,7 +48,7 @@ class ClientActor(destination: InetSocketAddress,
    * Behaviours
    */
 
-  def receive =  {
+  def receive = {
     case (router: ActorRef, request: TracedRequest) =>
       // start by establishing a new HTTP connection
       this.router = router
@@ -159,7 +158,7 @@ class ClientActor(destination: InetSocketAddress,
 
   // Connection failures that can arise anytime (except in initial and connect modes)
   def handleErrors: Receive = {
-    case Terminated(actor) if actor eq server =>
+    case Terminated(actor) if actor == server =>
       log.info("Connection expired ({})")
       connectionExpiredMeter.mark()
       throw new ConnectionExpiredException

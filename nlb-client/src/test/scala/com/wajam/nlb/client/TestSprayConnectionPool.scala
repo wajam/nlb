@@ -7,7 +7,7 @@ import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
 import org.scalatest.mock.MockitoSugar
 import akka.actor._
-import akka.util.duration._
+import scala.concurrent.duration._
 import akka.testkit.TestActorRef
 import akka.util.Timeout
 import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
@@ -127,14 +127,10 @@ class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
     system.awaitTermination()
   }
 
-  test("should kill a connection once it throws an exception") {
+  test("should kill a connection and remove it from the pool once it throws an exception") {
     connectionRef ! new Exception
 
     connectionRef.isTerminated should equal (true)
-  }
-
-  test("should remove a connection from the pool once it dies") {
-    poolSupervisorRef.receive(Terminated(connectionRef))
 
     pool.getPooledConnection(destination) should equal (None)
   }

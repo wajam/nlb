@@ -26,20 +26,20 @@ object NlbBuild extends Build {
 
   var commonDeps = Seq(
     "org.slf4j" % "slf4j-api" % "1.6.4",
-    "com.wajam" % "nrv-core_2.9.1" % "0.1-SNAPSHOT",
+    "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
     "nl.grons" %% "metrics-scala" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
-    "com.wajam" % "nrv-zookeeper_2.9.1" % "0.1-SNAPSHOT",
-    "org.scalatest" % "scalatest_2.9.0" % "1.9.1" % "test,it",
-    "junit" % "junit" % "4.10" % "test,it",
+    "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT",
+    "org.scalatest" %% "scalatest" % "1.9.1" % "test,it",
+    "junit" % "junit" % "4.11" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe" % "config" % "1.0.2",
-    "com.typesafe.akka" % "akka-actor" % "2.0.5",
-    "com.typesafe.akka" % "akka-testkit" % "2.0.5",
-    "com.typesafe.akka" % "akka-slf4j" % "2.0.5",
-    "io.spray" % "spray-io" % "1.0-M8.1",
-    "io.spray" % "spray-http" % "1.0-M8.1",
-    "io.spray" % "spray-util" % "1.0-M8.1",
-    "io.spray" % "spray-can" % "1.0-M8.1"
+    "com.typesafe.akka" % "akka-actor_2.10" % "2.2.0-RC1",
+    "com.typesafe.akka" % "akka-testkit_2.10" % "2.2.0-RC1",
+    "com.typesafe.akka" % "akka-slf4j_2.10" % "2.2.0-RC1",
+    "io.spray" % "spray-io" % "1.2-M8",
+    "io.spray" % "spray-http" % "1.2-M8",
+    "io.spray" % "spray-util" % "1.2-M8",
+    "io.spray" % "spray-can" % "1.2-M8"
   )
 
   val defaultSettings = Defaults.defaultSettings ++ Defaults.itSettings ++ Seq(
@@ -49,7 +49,7 @@ object NlbBuild extends Build {
     publishMavenStyle := true,
     organization := "com.wajam",
     version := "0.1-SNAPSHOT",
-    scalaVersion := "2.9.3"
+    scalaVersion := "2.10.2"
   )
 
   lazy val root = Project(PROJECT_NAME, file("."))

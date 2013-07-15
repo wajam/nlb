@@ -6,8 +6,9 @@ import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
 import com.typesafe.config.ConfigFactory
 import akka.actor._
-import akka.util.duration._
-import akka.util.{Timeout, Duration}
+import scala.concurrent.duration._
+import scala.concurrent.duration.Duration
+import akka.util.Timeout
 import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
@@ -35,6 +36,8 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   val HTTP_REQUEST = new HttpRequest()
   val TRACED_REQUEST = TracedRequest(HTTP_REQUEST)
   val HTTP_RESPONSE = new HttpResponse()
+
+  var testId = 0
 
   var connectorRef: TestActorRef[Actor] = _
   var connector: Actor = _
@@ -100,20 +103,22 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   case class ConnectorMessage(msg: Any)
 
   before {
-    connectorRef = TestActorRef(new ConnectorProxyActor, "connector")
+    connectorRef = TestActorRef(new ConnectorProxyActor, "connector" + testId)
     connector = connectorRef.underlyingActor
 
-    clientRef = TestActorRef(ClientActor(destination, clientInitialTimeout, connectorRef), "client")
+    clientRef = TestActorRef(ClientActor(destination, clientInitialTimeout, connectorRef), "client" + testId)
     client = clientRef.underlyingActor
 
-    routerRef = TestActorRef(new RouterProxyActor, "router")
+    routerRef = TestActorRef(new RouterProxyActor, "router" + testId)
     router = routerRef.underlyingActor
 
-    serverRef = TestActorRef(new ServerProxyActor, "server")
+    serverRef = TestActorRef(new ServerProxyActor, "server" + testId)
     server = serverRef.underlyingActor
   }
 
   after {
+    testId = testId + 1
+
     _system.stop(connectorRef)
     _system.stop(clientRef)
     _system.stop(routerRef)
