@@ -29,8 +29,9 @@ object NlbBuild extends Build {
 
   var commonDeps = Seq(
     "org.slf4j" % "slf4j-api" % "1.6.4",
-    "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
     "nl.grons" %% "metrics-scala" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
+    "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
+    "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT",
     "org.scalatest" %% "scalatest" % "1.9.1" % "test,it",
     "junit" % "junit" % "4.11" % "test,it",
@@ -56,28 +57,6 @@ object NlbBuild extends Build {
   )
 
   lazy val root = Project(PROJECT_NAME, file("."))
-    .configs(IntegrationTest)
-    .settings(defaultSettings: _*)
-    .settings(testOptions in IntegrationTest := Seq(Tests.Filter(s => s.contains("Test"))))
-    .settings(parallelExecution in IntegrationTest := false)
-    .settings(SbtStartScript.startScriptForClassesSettings: _*)
-    .aggregate(core)
-
-  lazy val core = Project(PROJECT_NAME+"-core", file(PROJECT_NAME+"-core"))
-    .configs(IntegrationTest)
-    .settings(defaultSettings: _*)
-    .settings(testOptions in IntegrationTest := Seq(Tests.Filter(s => s.contains("Test"))))
-    .settings(parallelExecution in IntegrationTest := false)
-    .settings(SbtStartScript.startScriptForClassesSettings: _*)
-
-  lazy val client = Project(PROJECT_NAME+"-client", file(PROJECT_NAME+"-client"))
-    .configs(IntegrationTest)
-    .settings(defaultSettings: _*)
-    .settings(testOptions in IntegrationTest := Seq(Tests.Filter(s => s.contains("Test"))))
-    .settings(parallelExecution in IntegrationTest := false)
-    .settings(SbtStartScript.startScriptForClassesSettings: _*)
-
-  lazy val server = Project(PROJECT_NAME+"-server", file(PROJECT_NAME+"-server"))
     .configs(IntegrationTest)
     .settings(defaultSettings: _*)
     .settings(testOptions in IntegrationTest := Seq(Tests.Filter(s => s.contains("Test"))))
