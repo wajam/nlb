@@ -12,6 +12,7 @@ import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import com.wajam.nrv.tracing.{Tracer, NullTraceRecorder}
+import com.wajam.nlb.TracedRequest
 
 /**
  * User: Clément
@@ -26,13 +27,13 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
 
   implicit val tracer = new Tracer(NullTraceRecorder)
 
-  val clientIdleTimeout: Duration = 2 seconds
   val clientInitialTimeout: Duration = 1 second
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
 
   val HTTP_CONNECTED = Http.Connected(destination, destination)
   val HTTP_REQUEST = new HttpRequest()
+  val TRACED_REQUEST = TracedRequest(HTTP_REQUEST)
   val HTTP_RESPONSE = new HttpResponse()
 
   var connectorRef: TestActorRef[Actor] = _
@@ -125,7 +126,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should connect to the server") {
-    routerRef ! TellTo(clientRef, (routerRef, HTTP_REQUEST))
+    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
 
     expectMsgPF() {
       case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] =>
@@ -133,7 +134,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should send the appropriate request to the server") {
-    routerRef ! TellTo(clientRef, (routerRef, HTTP_REQUEST))
+    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
 
     expectMsgPF() {
       // Send connection confirmation
@@ -147,7 +148,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should forward the response to the router when receiving an HttpResponse from the server") {
-    routerRef ! TellTo(clientRef, (routerRef, HTTP_REQUEST))
+    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
 
     expectMsgPF() {
       // Send connection ACK
@@ -168,7 +169,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     val messageChunk = new MessageChunk(Array[Byte](1, 0), "")
     val chunkEnd = ChunkedMessageEnd()
 
-    routerRef ! TellTo(clientRef, (routerRef, HTTP_REQUEST))
+    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
 
     expectMsgPF() {
       // Send connection ACK
@@ -196,25 +197,5 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
 
   test("should throw an InitialTimeoutException when creating an actor without feeding him with a request") {
     EventFilter[InitialTimeoutException](occurrences = 1) intercept {}
-  }
-
-  test("should throw a PoolTimeoutException when waiting too long in waitingForRequest state") {
-    routerRef ! TellTo(clientRef, (routerRef, HTTP_REQUEST))
-
-    expectMsgPF() {
-      // Send connection confirmation
-      case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] =>
-        serverRef ! TellTo(clientRef, Http.Connected(destination, destination))
-    }
-    expectMsgPF() {
-      // Reply to the request
-      case ServerMessage(msg) if msg.isInstanceOf[HttpRequest] => serverRef ! TellTo(clientRef, HTTP_RESPONSE)
-    }
-    expectMsgPF() {
-      // Check that the response is forwarded
-      case RouterMessage(msg) if msg.isInstanceOf[HttpResponse] =>
-    }
-
-    EventFilter[ConnectionExpiredException](occurrences = 1) intercept {}
   }
 }
