@@ -49,6 +49,6 @@ object Nlb extends App {
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(Props(ServerActor(pool, router)), name = "ServerHandler")
 
-  IO(Http) ! Http.Bind(handler, interface = "localhost", port = 8080)
+  IO(Http) ! Http.Bind(handler, interface = config.getServerListenInterface, port = config.getServerListenPort)
 
 }

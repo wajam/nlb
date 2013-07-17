@@ -34,6 +34,14 @@ class NlbConfiguration(config: Config) {
     config.getStringList("nlb.known-paths").toList
   }
 
+  def getServerListenInterface: String = {
+    config.getString("nlb.server.listen-interface")
+  }
+
+  def getServerListenPort: Int = {
+    config.getInt("nlb.server.listen-port")
+  }
+
   def getClientInitialTimeout: Long = {
     config.getMilliseconds("nlb.client.initial-timeout")
   }
