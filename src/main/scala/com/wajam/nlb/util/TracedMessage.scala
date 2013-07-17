@@ -12,7 +12,7 @@ import java.net.InetSocketAddress
  * Date: 2013-07-09
  * Time: 14:10
  */
-abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[TraceContext]) {
+abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[TraceContext], timer: Timer) {
 
   protected def getNewContextHeaders(newContext: Option[TraceContext]) = {
 
@@ -81,7 +81,7 @@ trait TracedMessageFactory[T <: HttpMessage] {
   }
 }
 
-case class TracedRequest(get: HttpRequest, context: Option[TraceContext]) extends TracedMessage(get, context) {
+case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer: Timer) extends TracedMessage(get, context, timer) {
 
   def path: String = get.uri.path.toString
   def method: String = get.method.toString
@@ -92,5 +92,10 @@ case class TracedRequest(get: HttpRequest, context: Option[TraceContext]) extend
 
 object TracedRequest extends TracedMessageFactory[HttpRequest] {
 
-  def apply(request: HttpRequest) = new TracedRequest(request, getContextFromMessageHeaders(request))
+  def apply(request: HttpRequest) = {
+    val timer = Timer("total-time-spent")
+    timer.start()
+
+    new TracedRequest(request, getContextFromMessageHeaders(request), timer)
+  }
 }

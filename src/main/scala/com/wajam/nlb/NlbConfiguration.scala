@@ -10,6 +10,10 @@ import com.typesafe.config._
 import scala.collection.JavaConversions._
 
 class NlbConfiguration(config: Config) {
+  def getEnvironment: String = {
+    config.getString("nlb.environment")
+  }
+
   def getZookeeperServers: String = {
     config.getString("nlb.resolving.zookeeper-servers")
   }
@@ -48,6 +52,22 @@ class NlbConfiguration(config: Config) {
 
   def getConnectionPoolMaxSize: Int = {
     config.getInt("nlb.connection-pool.max-size")
+  }
+
+  def getGraphiteServerAddress: String = {
+    config.getString("nlb.graphite.server-address")
+  }
+
+  def getGraphiteServerPort: Int = {
+    config.getInt("nlb.graphite.server-port")
+  }
+
+  def getGraphiteUpdatePeriodInSec: Int = {
+    config.getString("nlb.graphite.update-period-sec")
+  }
+
+  def isGraphiteEnabled: Boolean = {
+    config.getBoolean("nlb.graphite.enabled")
   }
 
   def isTraceEnabled: Boolean = {

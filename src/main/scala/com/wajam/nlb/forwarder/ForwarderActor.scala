@@ -50,6 +50,7 @@ class ForwarderActor(pool: SprayConnectionPool,
         log.info("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
+      request.timer.stop()
       context.stop(self)
 
     case chunkEnd: ChunkedMessageEnd =>
@@ -63,6 +64,7 @@ class ForwarderActor(pool: SprayConnectionPool,
         log.info("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
+      request.timer.stop()
       context.stop(self)
 
     case responseStart: ChunkedResponseStart =>

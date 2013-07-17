@@ -10,6 +10,9 @@ import com.wajam.nlb.util.Router
 import com.wajam.nrv.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
 import com.wajam.nrv.scribe.ScribeTraceRecorder
 import com.typesafe.config.ConfigFactory
+import com.yammer.metrics.reporting.GraphiteReporter
+import java.util.concurrent.TimeUnit
+import java.net.InetAddress
 
 /**
  * User: Clément
@@ -35,6 +38,15 @@ object Nlb extends App {
     }
   }
   else NullTraceRecorder
+
+  // Metrics binding to Graphite
+  if (config.isGraphiteEnabled) {
+    GraphiteReporter.enable(
+      config.getGraphiteUpdatePeriodInSec, TimeUnit.SECONDS,
+      config.getGraphiteServerAddress, config.getGraphiteServerPort,
+      config.getEnvironment + ".nlb." +
+        "%s_%d".format(InetAddress.getLocalHost.getHostName.replace(".", "-"), config.getServerListenPort))
+  }
 
   implicit val tracer = new Tracer(traceRecorder)
 

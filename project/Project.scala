@@ -32,6 +32,7 @@ object NlbBuild extends Build {
     "org.slf4j" % "slf4j-log4j12" % "1.6.4",
     "log4j" % "log4j" % "1.2.15" exclude("javax.jms", "jms") exclude("com.sun.jmx", "jmxri") exclude("com.sun.jdmk", "jmxtools"),
     "nl.grons" %% "metrics-scala" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
+    "com.yammer.metrics" % "metrics-graphite" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
     "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT" exclude("log4j", "log4j"),
     "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT"  exclude("log4j", "log4j"),

@@ -94,6 +94,8 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.ClientAddress(request.address))
       }
 
+      request.timer.pause()
+
       server ! request.withNewContext(subContext).get
 
       context.become(waitForResponse(subContext))
@@ -120,6 +122,7 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
       }
+      request.timer.start()
 
       context.become(waitForRequest)
       unchunkedResponsesMeter.mark()
@@ -148,6 +151,7 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
+      request.timer.start()
 
       context.become(waitForRequest)
       log.info("Received a chunked response end")
