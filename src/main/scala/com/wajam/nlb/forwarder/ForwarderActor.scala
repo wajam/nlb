@@ -1,6 +1,6 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{Actor, ActorRef, Status}
+import akka.actor.{Terminated, Actor, ActorRef, Status}
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import spray.util.SprayActorLogging
@@ -27,11 +27,29 @@ class ForwarderActor(pool: SprayConnectionPool,
   // Not to be mistaken with client, which is *our* client
   val clientActor = pool.getConnection(destination)
 
+  context.watch(clientActor)
+
   log.debug("Routing to node {} using connection {}", destination, clientActor)
 
   clientActor ! (self, request)
 
   def receive = {
+    case Terminated(_) =>
+      /* When the connection from the pool dies (possible race),
+         and we haven't transmitted anything yet,
+         we fallback on a brand new connection */
+      val fallbackClientActor = pool.getNewConnection(destination)
+      fallbackClientActor ! (self, request)
+      context.become(forwarding)
+    case msg =>
+      /* As soon as we receive something, we unwatch the connection.
+         Further errors will be handled using Spray events */
+      context.unwatch(clientActor)
+      context.become(forwarding)
+      self ! msg
+  }
+
+  def forwarding: Receive = {
     // Transmission finished, stop the router and pool the connection
     case response: HttpResponse =>
       client ! response
