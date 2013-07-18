@@ -51,7 +51,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
                           maxSize: Int,
                           askTimeout: Long,
                           implicit val system: ActorSystem)(implicit tracer: Tracer) extends Instrumented {
-  private val logger = LoggerFactory.getLogger("nlb.connectionpool.logger")
+  private val log = LoggerFactory.getLogger("nlb.connectionpool.logger")
 
   implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
@@ -124,8 +124,10 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
   def getConnection(destination: InetSocketAddress): ActorRef = {
     getPooledConnection(destination: InetSocketAddress) match {
       case Some(pooledConnection) =>
+        log.debug("Using a pooled connection")
         pooledConnection
       case None => {
+        log.debug("Using a new connection")
         getNewConnection(destination)
       }
     }
@@ -137,11 +139,11 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
       case (address, queue) => queue.remove(connection)
     } match {
       case Some((_, _)) =>
-        logger.debug("Removed connection from pool")
+        log.debug("Removed connection from pool")
         poolRemovesMeter.mark()
         markConnectionRemovedFromPool()
       case _ =>
-        logger.info("Could not find connection in pool")
+        log.info("Could not find connection in pool")
     }
   }
 
