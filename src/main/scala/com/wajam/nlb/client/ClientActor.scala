@@ -32,7 +32,7 @@ class ClientActor(destination: InetSocketAddress,
   private val chunkedResponsesMeter = metrics.meter("client-chunk-responses", "responses")
   private val unchunkedResponsesMeter = metrics.meter("client-unchunk-responses", "responses")
 
-  var forwarder: ActorRef = _
+  var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
   var request: TracedRequest = _
 
@@ -46,7 +46,7 @@ class ClientActor(destination: InetSocketAddress,
   def receive = {
     case (forwarder: ActorRef, request: TracedRequest) =>
       // start by establishing a new HTTP connection
-      this.forwarder = forwarder
+      this.forwarder = Some(forwarder)
       this.request = request
 
       context.become(connect)
@@ -64,7 +64,7 @@ class ClientActor(destination: InetSocketAddress,
       // once connected, we can send the request across the connection
       server = sender
       context.become(waitForRequest)
-      self ! (forwarder, request)
+      self ! (forwarder.get, request)
       openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
@@ -80,7 +80,7 @@ class ClientActor(destination: InetSocketAddress,
     // Already connected, new request to send
     case (newForwarder: ActorRef, request: TracedRequest) =>
       // Bind the new forwarder
-      forwarder = newForwarder
+      forwarder = Some(newForwarder)
 
       val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
@@ -100,7 +100,7 @@ class ClientActor(destination: InetSocketAddress,
   def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
     // Chunked responses
     case responseStart: ChunkedResponseStart =>
-      forwarder ! responseStart
+      forward(responseStart)
 
       tracer.trace(subContext) {
         tracer.record(Annotation.Message("First chunk received"))
@@ -112,14 +112,15 @@ class ClientActor(destination: InetSocketAddress,
 
     // Unchunked responses
     case response@ HttpResponse(status, entity, _, _) =>
-      forwarder ! response
+      forward(response)
 
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
       }
       request.timer.start()
 
-      context.become(waitForRequest)
+      becomeAvailable
+
       unchunkedResponsesMeter.mark()
       log.debug("Received {} response with {} bytes", status, entity.buffer.length)
 
@@ -137,18 +138,19 @@ class ClientActor(destination: InetSocketAddress,
 
   def streamResponse(subContext: Option[TraceContext], statusCode: Int): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
-      forwarder ! chunk
+      forward(chunk)
       log.debug("Received a chunk")
 
     case responseEnd: ChunkedMessageEnd =>
-      forwarder ! responseEnd
+      forward(responseEnd)
 
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
       request.timer.start()
 
-      context.become(waitForRequest)
+      becomeAvailable
+
       log.debug("Received a chunked response end")
   }
 
@@ -161,10 +163,25 @@ class ClientActor(destination: InetSocketAddress,
       log.debug("Connection expired ({})")
       connectionExpiredMeter.mark()
       throw new ConnectionExpiredException
+
     case ev: Http.ConnectionClosed =>
       log.debug("Connection closed by server ({})", ev)
       connectionClosedMeter.mark()
+
+      forward(ev)
+
       throw new ConnectionClosedException(ev)
+  }
+
+  def becomeAvailable = {
+    forwarder = None
+    context.become(waitForRequest)
+  }
+
+  def forward(msg: Any) = {
+    forwarder.map { forwarder =>
+      forwarder ! msg
+    }
   }
 }
 
