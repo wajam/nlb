@@ -8,12 +8,6 @@ import com.wajam.nrv.tracing.{Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Router, TracedRequest}
 
-/**
- * User: Clément
- * Date: 2013-06-19
- * Time: 16:52
- */
-
 class ForwarderActor(pool: SprayConnectionPool,
                      client: ActorRef,
                      request: TracedRequest,

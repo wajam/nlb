@@ -1,11 +1,5 @@
 package com.wajam.nlb
 
-/**
- * User: Clément
- * Date: 2013-06-17
- * Time: 09:50
- */
-
 import com.typesafe.config._
 import scala.collection.JavaConversions._
 

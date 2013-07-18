@@ -3,9 +3,7 @@ package com.wajam.nlb.util
 import com.yammer.metrics.scala.Instrumented
 
 /**
- * User: Clément
- * Date: 2013-07-17
- * Time: 16:57
+ * Wrapper around a Histogram metric to measure time with start, pause and stop directives.
  */
 class Timer(val metricName: String) extends Instrumented {
   private val histogram = metrics.histogram(metricName)

@@ -11,12 +11,6 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 
-/**
- * User: Clément
- * Date: 2013-06-17
- * Time: 10:18
- */
-
 class Router(knownPaths: List[String],
              zookeeperServers: String,
              resolvingService: String,

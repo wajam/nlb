@@ -9,12 +9,6 @@ import spray.http.HttpHeaders.RawHeader
 import com.wajam.nrv.service.TraceHeader
 import com.wajam.nrv.tracing.TraceContext
 
-/**
- * User: Clément
- * Date: 2013-07-11
- * Time: 09:54
- */
-
 @RunWith(classOf[JUnitRunner])
 class TestTracedMessage extends FunSuite with BeforeAndAfter {
 

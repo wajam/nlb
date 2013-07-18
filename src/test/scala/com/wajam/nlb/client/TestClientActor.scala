@@ -15,12 +15,6 @@ import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk
 import com.wajam.nrv.tracing.{Tracer, NullTraceRecorder}
 import com.wajam.nlb.util.TracedRequest
 
-/**
- * User: Clément
- * Date: 2013-06-25
- * Time: 11:58
- */
-
 @RunWith(classOf[JUnitRunner])
 class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with FunSuite with BeforeAndAfter with BeforeAndAfterAll {
 

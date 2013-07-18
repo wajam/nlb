@@ -1,11 +1,5 @@
 package com.wajam.nlb.client
 
-/**
- * User: Clément
- * Date: 2013-06-19
- * Time: 10:02
- */
-
 import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, ConcurrentHashMap}

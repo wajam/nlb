@@ -8,12 +8,6 @@ import org.scalatest.matchers.ShouldMatchers._
 import scala.util.matching.Regex
 import com.wajam.nlb.NlbConfiguration
 
-/**
- * User: Clément
- * Date: 2013-06-18
- * Time: 16:20
- */
-
 @RunWith(classOf[JUnitRunner])
 class TestRouter extends FunSuite with BeforeAndAfter with PrivateMethodTester {
 

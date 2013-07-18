@@ -10,11 +10,6 @@ import com.wajam.nlb.util.{TracedRequest, Router}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.forwarder.ForwarderActor
 
-/**
- * User: Clément
- * Date: 2013-06-12
- */
-
 class ServerActor(pool: SprayConnectionPool, router: Router)(implicit tracer: Tracer)
   extends Actor
   with SprayActorLogging

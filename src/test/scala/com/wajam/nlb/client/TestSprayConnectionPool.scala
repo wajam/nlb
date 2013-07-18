@@ -12,12 +12,6 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
 
-/**
- * User: Clément
- * Date: 2013-06-20
- * Time: 08:35
- */
-
 @RunWith(classOf[JUnitRunner])
 class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoSugar {
   implicit val tracer = new Tracer(NullTraceRecorder)

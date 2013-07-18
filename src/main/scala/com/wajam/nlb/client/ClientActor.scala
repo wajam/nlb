@@ -12,11 +12,6 @@ import com.wajam.nrv.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.TracedRequest
 
 /**
- * User: Clément
- * Date: 2013-06-12
- */
-
-/**
  * Actor handling an HTTP connection with a specific node.
  *
  * @param destination the destination node

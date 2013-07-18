@@ -14,11 +14,6 @@ import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
 import java.net.InetAddress
 
-/**
- * User: Clément
- * Date: 2013-06-12
- */
-
 object Nlb extends App {
 
   implicit val system = ActorSystem("nlb")

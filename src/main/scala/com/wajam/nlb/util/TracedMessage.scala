@@ -8,9 +8,7 @@ import spray.http.HttpHeaders.RawHeader
 import java.net.InetSocketAddress
 
 /**
- * User: Clément
- * Date: 2013-07-09
- * Time: 14:10
+ * Wrapper for a HTTP message with a tracing context and a Timer
  */
 abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[TraceContext], timer: Timer) {
 
