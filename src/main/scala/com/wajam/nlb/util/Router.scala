@@ -10,14 +10,20 @@ import java.net.{InetSocketAddress}
 import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
+import com.yammer.metrics.scala.Instrumented
 
 class Router(knownPaths: List[String],
              zookeeperServers: String,
              resolvingService: String,
              httpPort: Int,
-             localNodePort: Int) {
+             localNodePort: Int) extends Instrumented {
 
   private val log = LoggerFactory.getLogger("nlb.router.logger")
+
+  private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
+  private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")
+  private val allDownMeter = metrics.meter("router-all-down", "failures")
+  private val noResolvingNeeded = metrics.meter("router-no-resolving-needed", "queries")
 
   val matchers = getMatchers(knownPaths)
 
@@ -66,7 +72,10 @@ class Router(knownPaths: List[String],
   private def randomUpServiceMember: ServiceMember = {
     val members = service.members.filter(_.status == MemberStatus.Up)
 
-    if(members.isEmpty) throw new ResolvingException("No up service member")
+    if(members.isEmpty) {
+      allDownMeter.mark()
+      throw new ResolvingException("No up service member")
+    }
 
     val randPos = Random.nextInt(members.size)
 
@@ -84,12 +93,17 @@ class Router(knownPaths: List[String],
         log.debug("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
-          case Some(member) => member.node
-          case _ => randomUpServiceMember.node
+          case Some(member) =>
+            resolvedUpMeter.mark()
+            member.node
+          case _ =>
+            resolvedDownMeter.mark()
+            randomUpServiceMember.node
         }
       }
       case _ => {
         log.debug("Couldn't extract id from path "+ path +", routing randomly")
+        noResolvingNeeded.mark()
         randomUpServiceMember.node
       }
     }
