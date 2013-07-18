@@ -54,7 +54,7 @@ class ForwarderActor(pool: SprayConnectionPool,
         tracer.record(Annotation.ServerSend(None))
       }
 
-      if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose ⇒ true; case _ ⇒ false }) {
+      if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose => true; case _ => false }) {
         log.debug("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
