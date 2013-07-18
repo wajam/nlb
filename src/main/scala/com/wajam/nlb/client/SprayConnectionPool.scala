@@ -95,7 +95,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
   }
 
   // Try to get a connection from the pool
-  protected[client] def getPooledConnection(destination: InetSocketAddress): Option[ActorRef] = {
+  private[client] def getPooledConnection(destination: InetSocketAddress): Option[ActorRef] = {
     connectionMap.get(destination) match {
       case Some(queue) =>
         val maybeConnection = Option(queue.poll())
@@ -113,8 +113,8 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
     }
   }
 
-  // Get a new collection out of the pool
-  protected[client] def getNewConnection(destination: InetSocketAddress): ActorRef = {
+  // Get a new connection
+  def getNewConnection(destination: InetSocketAddress): ActorRef = {
     val future = poolSupervisor ? Props(ClientActor(destination, connectionInitialTimeout, IO(Http)))
     connectionPoolCreatesMeter.mark()
     Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
@@ -132,7 +132,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
   }
 
   // Remove an arbitrary connection from the pool
-  protected[nlb] def remove(connection: ActorRef) {
+  private[client] def remove(connection: ActorRef) {
     connectionMap.find {
       case (address, queue) => queue.remove(connection)
     } match {
