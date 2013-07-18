@@ -1,7 +1,6 @@
 # Local configuration
-etc/nlb.conf
-etc/test.conf
-
+etc/
+!etc/reference.conf
 
 # IDE generated files #
 ######################
