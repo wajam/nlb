@@ -54,7 +54,7 @@ class ClientActor(destination: InetSocketAddress,
       IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
 
     case ReceiveTimeout =>
-      log.warning("Initial timeout")
+      log.debug("Initial timeout")
       initialTimeoutsMeter.mark()
       throw new InitialTimeoutException
   }
@@ -94,7 +94,7 @@ class ClientActor(destination: InetSocketAddress,
       server ! request.withNewContext(subContext).get
 
       context.become(waitForResponse(subContext))
-      log.info("Received a new request to send")
+      log.debug("Received a new request to send")
   }
 
   def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
@@ -108,7 +108,7 @@ class ClientActor(destination: InetSocketAddress,
 
       context.become(streamResponse(subContext, responseStart.response.status.intValue))
       chunkedResponsesMeter.mark()
-      log.info("Received a chunked response start")
+      log.debug("Received a chunked response start")
 
     // Unchunked responses
     case response@ HttpResponse(status, entity, _, _) =>
@@ -121,7 +121,7 @@ class ClientActor(destination: InetSocketAddress,
 
       context.become(waitForRequest)
       unchunkedResponsesMeter.mark()
-      log.info("Received {} response with {} bytes", status, entity.buffer.length)
+      log.debug("Received {} response with {} bytes", status, entity.buffer.length)
 
     // Specific errors
     case ev: Http.SendFailed =>
@@ -138,7 +138,7 @@ class ClientActor(destination: InetSocketAddress,
   def streamResponse(subContext: Option[TraceContext], statusCode: Int): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       router ! chunk
-      log.info("Received a chunk")
+      log.debug("Received a chunk")
 
     case responseEnd: ChunkedMessageEnd =>
       router ! responseEnd
@@ -149,7 +149,7 @@ class ClientActor(destination: InetSocketAddress,
       request.timer.start()
 
       context.become(waitForRequest)
-      log.info("Received a chunked response end")
+      log.debug("Received a chunked response end")
   }
 
   // All types of connection closing are already handled in handleErrors
@@ -158,11 +158,11 @@ class ClientActor(destination: InetSocketAddress,
   // Connection failures that can arise anytime (except in initial and connect modes)
   def handleErrors: Receive = {
     case Terminated(actor) if actor == server =>
-      log.info("Connection expired ({})")
+      log.debug("Connection expired ({})")
       connectionExpiredMeter.mark()
       throw new ConnectionExpiredException
     case ev: Http.ConnectionClosed =>
-      log.info("Connection closed by server ({})", ev)
+      log.debug("Connection closed by server ({})", ev)
       connectionClosedMeter.mark()
       throw new ConnectionClosedException(ev)
   }

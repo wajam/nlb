@@ -27,7 +27,7 @@ class ForwarderActor(pool: SprayConnectionPool,
   // Not to be mistaken with client, which is *our* client
   val clientActor = pool.getConnection(destination)
 
-  log.info("Routing to node {} using connection {}", destination, clientActor)
+  log.debug("Routing to node {} using connection {}", destination, clientActor)
 
   clientActor ! (self, request)
 
@@ -41,7 +41,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       }
 
       if(!response.connectionCloseExpected) {
-        log.info("Pooling connection")
+        log.debug("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
       request.timer.stop()
@@ -55,7 +55,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       }
 
       if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose ⇒ true; case _ ⇒ false }) {
-        log.info("Pooling connection")
+        log.debug("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
       request.timer.stop()

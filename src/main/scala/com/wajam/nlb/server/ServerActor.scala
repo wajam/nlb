@@ -12,7 +12,6 @@ import com.wajam.nlb.forwarder.ForwarderActor
 
 class ServerActor(pool: SprayConnectionPool, router: Router)(implicit tracer: Tracer)
   extends Actor
-  with SprayActorLogging
   with Instrumented {
 
   private val incomingRequestsMeter = metrics.meter("server-incoming-requests", "requests")

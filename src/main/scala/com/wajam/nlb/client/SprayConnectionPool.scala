@@ -137,7 +137,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
       case (address, queue) => queue.remove(connection)
     } match {
       case Some((_, _)) =>
-        logger.info("Removed connection from pool")
+        logger.debug("Removed connection from pool")
         poolRemovesMeter.mark()
         markConnectionRemovedFromPool()
       case _ =>

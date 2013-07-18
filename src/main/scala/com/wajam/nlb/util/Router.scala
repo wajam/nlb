@@ -17,7 +17,7 @@ class Router(knownPaths: List[String],
              httpPort: Int,
              localNodePort: Int) {
 
-  private val logger = LoggerFactory.getLogger("nlb.router.logger")
+  private val log = LoggerFactory.getLogger("nlb.router.logger")
 
   val matchers = getMatchers(knownPaths)
 
@@ -54,7 +54,7 @@ class Router(knownPaths: List[String],
         matcher.findFirstMatchIn(path) match {
           case Some(m: Match) => {
             val id = m.group(1)
-            logger.info("Extracted id "+ id +" with matcher "+ matcher)
+            log.debug("Extracted id "+ id +" with matcher "+ matcher)
             Some(id)
           }
           case _ => getId(path, matchers.tail)
@@ -67,7 +67,7 @@ class Router(knownPaths: List[String],
     getId(path) match {
       case Some(id) => {
         val token = Resolver.hashData(id)
-        logger.info("Generated token "+ token)
+        log.debug("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
           case Some(member) => new InetSocketAddress(member.node.host, httpPort)
@@ -75,7 +75,7 @@ class Router(knownPaths: List[String],
         }
       }
       case _ => {
-        logger.info("Couldn't extract id from path "+ path +", routing randomly")
+        log.debug("Couldn't extract id from path "+ path +", routing randomly")
 
         val members = service.members
         val randPos = Random.nextInt(members.size)

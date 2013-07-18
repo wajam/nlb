@@ -70,10 +70,10 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     def receive: Receive = {
       case TellTo(recipient: ActorRef, msg: Any) =>
         recipient ! msg
-        log.info("Telling "+ msg +" to "+ recipient)
+        log.debug("Telling "+ msg +" to "+ recipient)
       case x =>
         testActor ! wrap(x)
-        log.info("Forwarding "+ x +" to testActor")
+        log.debug("Forwarding "+ x +" to testActor")
     }
 
     def wrap(msg: Any): Any
