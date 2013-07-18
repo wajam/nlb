@@ -15,7 +15,7 @@ class ForwarderActor(pool: SprayConnectionPool,
     extends Actor
     with SprayActorLogging {
 
-  log.info("Starting forwarding response for {}...", request)
+  log.debug("Starting forwarding response for {}...", request)
 
   val destination = tracer.trace(request.context) {
     tracer.time("Resolving destination") {

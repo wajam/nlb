@@ -24,7 +24,7 @@ import com.wajam.nrv.tracing.Tracer
 class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
 
   // Stop the actor on any exception
-  override val supervisorStrategy = OneForOneStrategy() {
+  override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
     case _: Exception =>
       Stop
   }

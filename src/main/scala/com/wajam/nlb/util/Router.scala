@@ -1,7 +1,7 @@
 package com.wajam.nlb.util
 
-import com.wajam.nrv.cluster.{Cluster, LocalNode}
-import com.wajam.nrv.service.{Service, Resolver}
+import com.wajam.nrv.cluster.{Cluster, LocalNode, Node}
+import com.wajam.nrv.service.{ServiceMember, MemberStatus, Service, Resolver}
 import com.wajam.nrv.zookeeper.cluster.ZookeeperClusterManager
 import com.wajam.nrv.zookeeper.ZookeeperClient
 import scala.util.Random
@@ -63,25 +63,38 @@ class Router(knownPaths: List[String],
     }
   }
 
+  private def randomUpServiceMember: ServiceMember = {
+    val members = service.members.filter(_.status == MemberStatus.Up)
+
+    if(members.isEmpty) throw new ResolvingException("No up service member")
+
+    val randPos = Random.nextInt(members.size)
+
+    members.toList(randPos)
+  }
+
+  private def nodeToInet(node: Node) = {
+    new InetSocketAddress(node.host, httpPort)
+  }
+
   def resolve(path: String): InetSocketAddress = {
-    getId(path) match {
+    val node = getId(path) match {
       case Some(id) => {
         val token = Resolver.hashData(id)
         log.debug("Generated token "+ token)
 
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
-          case Some(member) => new InetSocketAddress(member.node.host, httpPort)
-          case _ => throw new Exception("Could not find Service Member for token " + token)
+          case Some(member) => member.node
+          case _ => randomUpServiceMember.node
         }
       }
       case _ => {
         log.debug("Couldn't extract id from path "+ path +", routing randomly")
-
-        val members = service.members
-        val randPos = Random.nextInt(members.size)
-
-        new InetSocketAddress(members.toList(randPos).node.host, httpPort)
+        randomUpServiceMember.node
       }
     }
+    nodeToInet(node)
   }
 }
+
+class ResolvingException(message: String) extends Exception(message)
