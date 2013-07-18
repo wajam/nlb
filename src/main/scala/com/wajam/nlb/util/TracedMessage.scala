@@ -50,22 +50,22 @@ trait TracedMessageFactory[T <: HttpMessage] {
       headers match {
         case Nil =>
           context
-        case head :: _ =>
+        case head :: tail =>
           head match {
             case HttpHeader(TraceId, value: String) =>
-              extractContext(headers.tail, context.copy(traceId = value))
+              extractContext(tail, context.copy(traceId = value))
 
             case HttpHeader(SpanId, value: String) =>
-              extractContext(headers.tail, context.copy(spanId = value))
+              extractContext(tail, context.copy(spanId = value))
 
             case HttpHeader(ParentId, value: String) =>
-              extractContext(headers.tail, context.copy(parentId = Some(value)))
+              extractContext(tail, context.copy(parentId = Some(value)))
 
             case HttpHeader(Sampled, value: String) =>
-              extractContext(headers.tail, context.copy(sampled = Some(value.toBoolean)))
+              extractContext(tail, context.copy(sampled = Some(value.toBoolean)))
 
             case _ =>
-              extractContext(headers.tail, context)
+              extractContext(tail, context)
           }
       }
     }
