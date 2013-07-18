@@ -63,7 +63,7 @@ class NlbConfiguration(config: Config) {
   }
 
   def getGraphiteUpdatePeriodInSec: Int = {
-    config.getString("nlb.graphite.update-period-sec")
+    config.getInt("nlb.graphite.update-period-sec")
   }
 
   def isGraphiteEnabled: Boolean = {
