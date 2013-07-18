@@ -7,10 +7,12 @@ import org.scalatest.matchers.ShouldMatchers._
 import spray.http.{HttpHeader, HttpRequest}
 import spray.http.HttpHeaders.RawHeader
 import com.wajam.nrv.service.TraceHeader
-import com.wajam.nrv.tracing.TraceContext
+import com.wajam.nrv.tracing.{ConsoleTraceRecorder, Tracer, TraceContext}
 
 @RunWith(classOf[JUnitRunner])
 class TestTracedMessage extends FunSuite with BeforeAndAfter {
+
+  implicit val tracer = new Tracer(ConsoleTraceRecorder)
 
   val traceId = "1234"
   val spanId = "5678"
@@ -32,6 +34,24 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
     val expectedTraceContext = Some(sampleContext)
 
     tracedRequest.context should equal (expectedTraceContext)
+  }
+
+  test("should create a new context if context headers are not set") {
+    val request = new HttpRequest()
+
+    val tracedRequest = TracedRequest(request)
+
+    tracedRequest.context should be ('defined)
+  }
+
+  test("should respect the sampled header if set") {
+    val request = new HttpRequest(headers = List(
+      new RawHeader(TraceHeader.Sampled.toString, "true")
+    ))
+
+    val tracedRequest = TracedRequest(request)
+
+    tracedRequest.context.get.sampled should equal (Some(true))
   }
 
   test("should set trace context in request headers") {

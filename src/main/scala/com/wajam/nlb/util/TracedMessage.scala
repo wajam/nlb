@@ -1,7 +1,7 @@
 package com.wajam.nlb.util
 
 import spray.http.{HttpRequest, HttpHeader, HttpMessage}
-import com.wajam.nrv.tracing.TraceContext
+import com.wajam.nrv.tracing.{Tracer, TraceContext}
 import scala.annotation.tailrec
 import com.wajam.nrv.service.TraceHeader
 import spray.http.HttpHeaders.RawHeader
@@ -37,7 +37,7 @@ abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[Trac
 
 trait TracedMessageFactory[T <: HttpMessage] {
 
-  def getContextFromMessageHeaders(message: T): Option[TraceContext] = {
+  def getContextFromMessageHeaders(message: T)(implicit tracer: Tracer): Option[TraceContext] = {
     val context = TraceContext("", "", None, None)
 
     @tailrec
@@ -71,8 +71,8 @@ trait TracedMessageFactory[T <: HttpMessage] {
     }
 
     extractContext(message.headers, context) match {
-      case TraceContext(traceId, spanId, _, _) if traceId.isEmpty || spanId.isEmpty =>
-        None
+      case TraceContext(traceId, spanId, _, sampled) if traceId.isEmpty || spanId.isEmpty =>
+        Some(tracer.createContext(sampled))
       case context =>
         Some(context)
     }
@@ -90,7 +90,7 @@ case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer:
 
 object TracedRequest extends TracedMessageFactory[HttpRequest] {
 
-  def apply(request: HttpRequest) = {
+  def apply(request: HttpRequest)(implicit tracer: Tracer) = {
     val timer = Timer("total-time-spent")
     timer.start()
 
