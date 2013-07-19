@@ -28,7 +28,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
 
   val HTTP_CONNECTED = Http.Connected(destination, destination)
   val HTTP_REQUEST = new HttpRequest()
-  val TRACED_REQUEST = TracedRequest(HTTP_REQUEST)
+  val TRACED_REQUEST = TracedRequest(HTTP_REQUEST, null)
   val HTTP_RESPONSE = new HttpResponse()
 
   var testId = 0

@@ -57,6 +57,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       tracer.trace(request.context) {
         tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
       }
+      request.timer.stop()
 
       if(!response.connectionCloseExpected) {
         log.debug("Pooling connection")

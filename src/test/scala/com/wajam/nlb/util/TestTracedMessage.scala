@@ -29,7 +29,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
       new RawHeader(TraceHeader.Sampled.toString, sampled.get.toString)
     ))
 
-    val tracedRequest = TracedRequest(request)
+    val tracedRequest = TracedRequest(request, null)
 
     val expectedTraceContext = Some(sampleContext)
 
@@ -39,7 +39,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
   test("should create a new context if context headers are not set") {
     val request = new HttpRequest()
 
-    val tracedRequest = TracedRequest(request)
+    val tracedRequest = TracedRequest(request, null)
 
     tracedRequest.context should be ('defined)
   }
@@ -49,7 +49,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
       new RawHeader(TraceHeader.Sampled.toString, "true")
     ))
 
-    val tracedRequest = TracedRequest(request)
+    val tracedRequest = TracedRequest(request, null)
 
     tracedRequest.context.get.sampled should equal (Some(true))
   }
@@ -57,7 +57,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
   test("should set trace context in request headers") {
     val request = new HttpRequest
 
-    val tracedRequest = TracedRequest(request).withNewContext(Some(sampleContext))
+    val tracedRequest = TracedRequest(request, null).withNewContext(Some(sampleContext))
 
     tracedRequest.get.headers should {
       contain (new RawHeader(TraceHeader.TraceId.toString, traceId).asInstanceOf[HttpHeader]) and

@@ -10,7 +10,7 @@ import java.net.InetSocketAddress
 /**
  * Wrapper for a HTTP message with a tracing context and a Timer
  */
-abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[TraceContext], timer: Timer) {
+abstract class TracedMessage[+T <: HttpMessage](message: T, context: Option[TraceContext], timer: StartStopTimer) {
 
   protected def getNewContextHeaders(newContext: Option[TraceContext]) = {
 
@@ -79,7 +79,7 @@ trait TracedMessageFactory[T <: HttpMessage] {
   }
 }
 
-case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer: Timer) extends TracedMessage(get, context, timer) {
+case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer: StartStopTimer) extends TracedMessage(get, context, timer) {
 
   def path: String = get.uri.path.toString
   def method: String = get.method.toString
@@ -90,8 +90,7 @@ case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer:
 
 object TracedRequest extends TracedMessageFactory[HttpRequest] {
 
-  def apply(request: HttpRequest)(implicit tracer: Tracer) = {
-    val timer = Timer("total-time-spent")
+  def apply(request: HttpRequest, timer: StartStopTimer)(implicit tracer: Tracer) = {
     timer.start()
 
     new TracedRequest(request, getContextFromMessageHeaders(request), timer)

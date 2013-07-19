@@ -10,6 +10,7 @@ import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.nrv.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.TracedRequest
+import com.wajam.nlb.util.Timing
 
 /**
  * Actor handling an HTTP connection with a specific node.
@@ -19,7 +20,7 @@ import com.wajam.nlb.util.TracedRequest
  */
 class ClientActor(destination: InetSocketAddress,
                   initialTimeout: Duration,
-                  IOconnector: ActorRef)(implicit tracer: Tracer) extends Actor with SprayActorLogging with Instrumented {
+                  IOconnector: ActorRef)(implicit tracer: Tracer) extends Actor with SprayActorLogging with Instrumented with Timing {
   import context.system
 
   private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
@@ -31,6 +32,10 @@ class ClientActor(destination: InetSocketAddress,
   private val openConnectionsCounter = metrics.counter("client-open-connections", "connections")
   private val chunkedResponsesMeter = metrics.meter("client-chunk-responses", "responses")
   private val unchunkedResponsesMeter = metrics.meter("client-unchunk-responses", "responses")
+  private val totalChunksMeter = metrics.meter("client-total-chunks-transferred", "chunks")
+
+  private val clusterReplyTimer = timer("cluster-reply-time")
+  private val clusterTransferTimer = timer("cluster-transfer-time")
 
   var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
@@ -89,7 +94,7 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.ClientAddress(request.address))
       }
 
-      request.timer.pause()
+      clusterReplyTimer.start()
 
       server ! request.withNewContext(subContext).get
 
@@ -105,6 +110,8 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.Message("First chunk received"))
       }
+      clusterReplyTimer.stop()
+      clusterTransferTimer.start()
 
       context.become(streamResponse(subContext, responseStart.response.status.intValue))
       chunkedResponsesMeter.mark()
@@ -117,7 +124,9 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
       }
-      request.timer.start()
+      clusterReplyTimer.stop()
+      // For unchunked responses, update transfer time with the smallest accepted value
+      clusterTransferTimer.update(1)
 
       becomeAvailable
 
@@ -140,6 +149,7 @@ class ClientActor(destination: InetSocketAddress,
     case chunk: MessageChunk =>
       forward(chunk)
       log.debug("Received a chunk")
+      totalChunksMeter.mark()
 
     case responseEnd: ChunkedMessageEnd =>
       forward(responseEnd)
@@ -147,7 +157,7 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
-      request.timer.start()
+      clusterTransferTimer.stop()
 
       becomeAvailable
 
