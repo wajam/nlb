@@ -83,4 +83,8 @@ class NlbConfiguration(config: Config) {
   def getTraceScribeSamplingRate: Int = {
     config.getInt("nlb.trace.scribe.sampling-rate")
   }
+
+  def getForwarderIdleTimeout: Long = {
+    config.getMilliseconds("nlb.forwarder.idle-timeout")
+  }
 }

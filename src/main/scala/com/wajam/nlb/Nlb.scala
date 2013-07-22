@@ -53,8 +53,10 @@ object Nlb extends App {
 
   val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getClientInitialTimeout, system)
 
+  val forwarderIdleTimeout = config.getForwarderIdleTimeout milliseconds
+
   // the handler actor replies to incoming HttpRequests
-  val handler = system.actorOf(Props(ServerActor(pool, router)), name = "ServerHandler")
+  val handler = system.actorOf(Props(ServerActor(pool, router, forwarderIdleTimeout)), name = "ServerHandler")
 
   IO(Http) ! Http.Bind(handler, interface = config.getServerListenInterface, port = config.getServerListenPort)
 

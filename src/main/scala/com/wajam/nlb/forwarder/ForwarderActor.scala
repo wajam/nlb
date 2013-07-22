@@ -1,6 +1,7 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{Terminated, Actor, ActorRef, Status}
+import akka.actor.{Terminated, Actor, ActorRef}
+import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import spray.util.SprayActorLogging
@@ -11,7 +12,8 @@ import com.wajam.nlb.util.{Router, TracedRequest}
 class ForwarderActor(pool: SprayConnectionPool,
                      client: ActorRef,
                      request: TracedRequest,
-                     router: Router)(implicit tracer: Tracer)
+                     router: Router,
+                     idleTimeout: Duration)(implicit tracer: Tracer)
     extends Actor
     with SprayActorLogging {
 
@@ -26,6 +28,9 @@ class ForwarderActor(pool: SprayConnectionPool,
   // clientActor is the actor handling the connection with the server
   // Not to be mistaken with client, which is *our* client
   val clientActor = pool.getConnection(destination)
+
+  // Set an initial timeout
+  setTimeout()
 
   context.watch(clientActor)
 
@@ -81,6 +86,9 @@ class ForwarderActor(pool: SprayConnectionPool,
       context.stop(self)
 
     case responseStart: ChunkedResponseStart =>
+      // Renew the idle timeout
+      setTimeout()
+
       client ! responseStart
 
       tracer.trace(request.context) {
@@ -91,9 +99,17 @@ class ForwarderActor(pool: SprayConnectionPool,
       client ! response
       context.stop(self)
   }
+
+  def setTimeout() = {
+    context.setReceiveTimeout(idleTimeout)
+  }
 }
 
 object ForwarderActor {
 
-  def apply(pool: SprayConnectionPool, client: ActorRef, message: TracedRequest, router: Router)(implicit tracer: Tracer) = new ForwarderActor(pool, client, message, router)
+  def apply(pool: SprayConnectionPool,
+            client: ActorRef,
+            message: TracedRequest,
+            router: Router,
+            idleTimeout: Duration)(implicit tracer: Tracer) = new ForwarderActor(pool, client, message, router, idleTimeout)
 }
