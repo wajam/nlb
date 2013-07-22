@@ -128,7 +128,7 @@ class ClientActor(destination: InetSocketAddress,
       // For unchunked responses, update transfer time with the smallest accepted value
       clusterTransferTimer.update(1)
 
-      becomeAvailable
+      becomeAvailable()
 
       unchunkedResponsesMeter.mark()
       log.debug("Received {} response with {} bytes", status, entity.buffer.length)
@@ -159,7 +159,7 @@ class ClientActor(destination: InetSocketAddress,
       }
       clusterTransferTimer.stop()
 
-      becomeAvailable
+      becomeAvailable()
 
       log.debug("Received a chunked response end")
   }
@@ -183,7 +183,7 @@ class ClientActor(destination: InetSocketAddress,
       throw new ConnectionClosedException(ev)
   }
 
-  def becomeAvailable = {
+  def becomeAvailable() = {
     forwarder = None
     context.become(waitForRequest)
   }
