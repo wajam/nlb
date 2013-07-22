@@ -87,12 +87,9 @@ class ForwarderActor(pool: SprayConnectionPool,
         tracer.record(Annotation.Message("First chunk sent"))
       }
 
-    // Error or connection successfully closed, stop the router without pooling the connection
-    case Status.Failure | Status.Success =>
-      context.stop(self)
-
     case response =>
       client ! response
+      context.stop(self)
   }
 }
 

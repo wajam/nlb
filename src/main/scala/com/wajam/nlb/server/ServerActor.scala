@@ -25,20 +25,17 @@ class ServerActor(pool: SprayConnectionPool, router: Router)(implicit tracer: Tr
       case _: Exception          => Stop
     }
 
-  var client: Option[ActorRef] = None
-
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
     case _: Http.Connected => sender ! Http.Register(self)
 
     case req: HttpRequest =>
-      client = Some(sender)
+      val client = sender
 
       val totalTimeTimer = timer("round-trip-total-time")
       val request = TracedRequest(req, totalTimeTimer)
 
-      val forwarder = context actorOf Props(ForwarderActor(pool, client.get, request, router))
-      context.watch(forwarder)
+      context actorOf Props(ForwarderActor(pool, client, request, router))
 
       tracer.trace(request.context) {
         tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", request.method, request.path)))
@@ -46,12 +43,6 @@ class ServerActor(pool: SprayConnectionPool, router: Router)(implicit tracer: Tr
       }
 
       incomingRequestsMeter.mark()
-
-    case Terminated(child) =>
-      client.map { client =>
-        log.debug("Forwarder died, closing connection")
-        client ! Http.Close
-      }
   }
 }
 
