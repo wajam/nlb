@@ -35,7 +35,7 @@ class ClientActor(destination: InetSocketAddress,
   private val totalChunksMeter = metrics.meter("client-total-chunks-transferred", "chunks")
 
   private val clusterReplyTimer = timer("cluster-reply-time")
-  private val clusterTransferTimer = timer("cluster-transfer-time")
+  private val chunkTransferTimer = timer("chunk-transfer-time")
 
   var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
@@ -111,7 +111,7 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.Message("First chunk received"))
       }
       clusterReplyTimer.stop()
-      clusterTransferTimer.start()
+      chunkTransferTimer.start()
 
       context.become(streamResponse(subContext, responseStart.response.status.intValue))
       chunkedResponsesMeter.mark()
@@ -125,8 +125,6 @@ class ClientActor(destination: InetSocketAddress,
         tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
       }
       clusterReplyTimer.stop()
-      // For unchunked responses, update transfer time with the smallest accepted value
-      clusterTransferTimer.update(1)
 
       becomeAvailable()
 
@@ -157,7 +155,7 @@ class ClientActor(destination: InetSocketAddress,
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientRecv(Some(statusCode)))
       }
-      clusterTransferTimer.stop()
+      chunkTransferTimer.stop()
 
       becomeAvailable()
 
