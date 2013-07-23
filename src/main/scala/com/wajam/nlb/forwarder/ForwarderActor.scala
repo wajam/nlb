@@ -1,6 +1,6 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{Terminated, Actor, ActorRef}
+import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef}
 import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
@@ -46,6 +46,11 @@ class ForwarderActor(pool: SprayConnectionPool,
       val fallbackClientActor = pool.getNewConnection(destination)
       fallbackClientActor ! (self, request)
       context.become(forwarding)
+
+    case ReceiveTimeout =>
+      log.warning("Forwarder initial timeout")
+      context.stop(self)
+
     case msg =>
       /* As soon as we receive something, we unwatch the connection.
          Further errors will be handled using Spray events */
@@ -94,6 +99,16 @@ class ForwarderActor(pool: SprayConnectionPool,
       tracer.trace(request.context) {
         tracer.record(Annotation.Message("First chunk sent"))
       }
+
+    case chunk: MessageChunk =>
+      // Renew the idle timeout
+      setTimeout()
+
+      client ! chunk
+
+    case ReceiveTimeout =>
+      log.warning("Forwarder idle timeout")
+      context.stop(self)
 
     case response =>
       client ! response
