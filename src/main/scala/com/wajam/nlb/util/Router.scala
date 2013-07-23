@@ -27,6 +27,11 @@ class Router(knownPaths: List[String],
 
   val matchers = getMatchers(knownPaths)
 
+  log.info("Initialized Router with matchers:")
+  matchers.foreach { matcher =>
+    log.info(matcher.toString)
+  }
+
   lazy val zookeeper = new ZookeeperClient(zookeeperServers)
   val clusterManager = new ZookeeperClusterManager(zookeeper)
   val node = new LocalNode(Map("nrv" -> localNodePort))

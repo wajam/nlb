@@ -143,7 +143,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
         poolRemovesMeter.mark()
         markConnectionRemovedFromPool()
       case _ =>
-        log.info("Could not find connection in pool")
+        log.debug("Could not find connection in pool")
     }
   }
 

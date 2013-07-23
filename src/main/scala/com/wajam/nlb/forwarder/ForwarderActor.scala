@@ -107,7 +107,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       client ! chunk
 
     case ReceiveTimeout =>
-      log.warning("Forwarder idle timeout")
+      log.debug("Forwarder idle timeout")
       context.stop(self)
 
     case response =>

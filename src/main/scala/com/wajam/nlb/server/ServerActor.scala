@@ -28,7 +28,8 @@ class ServerActor(pool: SprayConnectionPool, router: Router, forwarderIdleTimeou
 
   def receive = {
     // when a new connection comes in we register ourselves as the connection handler
-    case _: Http.Connected => sender ! Http.Register(self)
+    case _: Http.Connected =>
+      sender ! Http.Register(self)
 
     case req: HttpRequest =>
       val client = sender
