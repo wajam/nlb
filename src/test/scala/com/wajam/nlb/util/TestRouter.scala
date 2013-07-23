@@ -38,7 +38,7 @@ class TestRouter extends FunSuite with BeforeAndAfter with PrivateMethodTester {
     val getMatchers = PrivateMethod[List[Regex]]('getMatchers)
 
     router invokePrivate getMatchers(fixture.samplePathList) map(_.toString) should equal(List(
-        """foo/(\w+)$""",
+        """foo/(\w+)(\?.+)?$""",
         """bar/(\w+)/.+"""
       ))
   }
@@ -56,6 +56,15 @@ class TestRouter extends FunSuite with BeforeAndAfter with PrivateMethodTester {
     val matchers = router invokePrivate getMatchers(fixture.samplePathList)
 
     router invokePrivate getId("foo/id", matchers) should equal(Some("id"))
+  }
+
+  test("should extract id from /foo/id?param=value&otherparam=othervalue") {
+    val getMatchers = PrivateMethod[List[Regex]]('getMatchers)
+    val getId = PrivateMethod[Option[String]]('getId)
+
+    val matchers = router invokePrivate getMatchers(fixture.samplePathList)
+
+    router invokePrivate getId("foo/id?param=value", matchers) should equal(Some("id"))
   }
 
   test("should extract id from /bar/id/foo") {
