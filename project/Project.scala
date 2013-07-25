@@ -20,7 +20,8 @@ object NlbBuild extends Build {
     "Cloudera" at "https://repository.cloudera.com/artifactory/cloudera-repos/",
     "Scallop" at "http://mvnrepository.com/",
     "Typesafe Repository" at "http://repo.typesafe.com/typesafe/releases/",
-    "Spray Repository" at "http://repo.spray.io"
+    "Spray Repository" at "http://repo.spray.io",
+    "Spray Nightly" at "http://nightlies.spray.io"
   )
 
   var commonDeps = Seq(
@@ -36,13 +37,13 @@ object NlbBuild extends Build {
     "junit" % "junit" % "4.11" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe" % "config" % "1.0.2",
-    "com.typesafe.akka" %% "akka-actor" % "2.2.0-RC1",
-    "com.typesafe.akka" %% "akka-testkit" % "2.2.0-RC1",
-    "com.typesafe.akka" %% "akka-slf4j" % "2.2.0-RC1" exclude("org.slf4j", "slf4j-api"),
-    "io.spray" % "spray-io" % "1.2-M8",
-    "io.spray" % "spray-http" % "1.2-M8",
-    "io.spray" % "spray-util" % "1.2-M8",
-    "io.spray" % "spray-can" % "1.2-M8"
+    "com.typesafe.akka" %% "akka-actor" % "2.2.0",
+    "com.typesafe.akka" %% "akka-testkit" % "2.2.0",
+    "com.typesafe.akka" %% "akka-slf4j" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
+    "io.spray" % "spray-io" % "1.2-20130719",
+    "io.spray" % "spray-http" % "1.2-20130719",
+    "io.spray" % "spray-util" % "1.2-20130719",
+    "io.spray" % "spray-can" % "1.2-20130719"
   )
 
   val defaultSettings = Defaults.defaultSettings ++ Defaults.itSettings ++ Seq(
