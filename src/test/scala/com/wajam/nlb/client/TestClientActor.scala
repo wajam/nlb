@@ -13,10 +13,12 @@ import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import com.wajam.nrv.tracing.{Tracer, NullTraceRecorder}
-import com.wajam.nlb.util.TracedRequest
+import com.wajam.nlb.util.{StartStopTimer, TracedRequest}
+import com.wajam.nlb.test.ActorProxy
+import org.scalatest.mock.MockitoSugar
 
 @RunWith(classOf[JUnitRunner])
-class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with FunSuite with BeforeAndAfter with BeforeAndAfterAll {
+class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
 
   implicit val askTimeout = Timeout(5 seconds)
 
@@ -26,9 +28,11 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
 
+  val timer = mock[StartStopTimer]
+
   val HTTP_CONNECTED = Http.Connected(destination, destination)
   val HTTP_REQUEST = new HttpRequest()
-  val TRACED_REQUEST = TracedRequest(HTTP_REQUEST, null)
+  val TRACED_REQUEST = TracedRequest(HTTP_REQUEST, timer)
   val HTTP_RESPONSE = new HttpResponse()
 
   var testId = 0
@@ -55,31 +59,6 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
      akka.event-handlers = ["akka.testkit.TestEventListener"]
      """)))
   }
-
-  /** Define proxy actors that will act as:
-    * - the Router actor (defined at the application level, usually calling the Client actor),
-    * - the Server actor (furnished by Spray and representing the node),
-    * - the Connector actor (usually IO(Http))
-    *
-    * These proxies will send any message to any actor when receiving a TellTo message.
-    *
-    * They will also forward every message they receive to testActor, after wrapping them in a
-    * specific case class so that testActor can check which proxy sent it.
-    */
-  abstract class ProxyActor extends Actor with ActorLogging {
-    def receive: Receive = {
-      case TellTo(recipient: ActorRef, msg: Any) =>
-        recipient ! msg
-        log.debug("Telling "+ msg +" to "+ recipient)
-      case x =>
-        testActor ! wrap(x)
-        log.debug("Forwarding "+ x +" to testActor")
-    }
-
-    def wrap(msg: Any): Any
-  }
-
-  case class TellTo(recipient: ActorRef, msg: Any)
 
   class RouterProxyActor extends ProxyActor {
     def wrap(msg: Any) = RouterMessage(msg)
