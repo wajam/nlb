@@ -21,6 +21,7 @@ class ForwarderActor(pool: SprayConnectionPool,
   log.debug("Starting forwarding response for {}...", request)
 
   val totalTimeTimer = timer("round-trip-total-time")
+  private val totalChunksMeter = metrics.meter("forwarder-total-chunks-transferred", "chunks")
   val tracedRequest = TracedRequest(request, totalTimeTimer)
 
   tracer.trace(tracedRequest.context) {
@@ -54,22 +55,11 @@ class ForwarderActor(pool: SprayConnectionPool,
          we fallback on a brand new connection */
       val fallbackClientActor = pool.getNewConnection(destination)
       fallbackClientActor ! (self, tracedRequest)
-      context.become(forwarding)
 
     case ReceiveTimeout =>
       log.warning("Forwarder initial timeout")
       context.stop(self)
 
-    case msg =>
-      /* As soon as we receive something, we unwatch the connection.
-         Further errors will be handled using Spray events */
-      context.unwatch(clientActor)
-      context.become(forwarding)
-      self ! msg
-  }
-
-  def forwarding: Receive = {
-    // Transmission finished, stop the router and pool the connection
     case response: HttpResponse =>
       client ! response
 
@@ -85,8 +75,28 @@ class ForwarderActor(pool: SprayConnectionPool,
       tracedRequest.timer.stop()
       context.stop(self)
 
+    case responseStart: ChunkedResponseStart =>
+      // Renew the idle timeout
+      setTimeout()
+
+      log.debug("Forwarder received ChunkedResponseStart")
+
+      client ! responseStart
+
+      tracer.trace(tracedRequest.context) {
+        tracer.record(Annotation.Message("First chunk sent"))
+      }
+
+      context.unwatch(clientActor)
+      context.become(streaming)
+  }
+
+  def streaming: Receive = {
+
     case chunkEnd: ChunkedMessageEnd =>
       client ! chunkEnd
+
+      log.debug("Forwarder received ChunkedMessageEnd")
 
       tracer.trace(tracedRequest.context) {
         tracer.record(Annotation.ServerSend(None))
@@ -103,6 +113,8 @@ class ForwarderActor(pool: SprayConnectionPool,
       // Renew the idle timeout
       setTimeout()
 
+      log.debug("Forwarder received ChunkedResponseStart")
+
       client ! responseStart
 
       tracer.trace(tracedRequest.context) {
@@ -113,14 +125,14 @@ class ForwarderActor(pool: SprayConnectionPool,
       // Renew the idle timeout
       setTimeout()
 
+      log.debug("Forwarder received MessageChunk")
+
+      totalChunksMeter.mark()
+
       client ! chunk
 
     case ReceiveTimeout =>
       log.debug("Forwarder idle timeout")
-      context.stop(self)
-
-    case response =>
-      client ! response
       context.stop(self)
   }
 
