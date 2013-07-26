@@ -21,7 +21,7 @@ class ForwarderActor(pool: SprayConnectionPool,
   log.debug("Starting forwarding response for {}...", request)
 
   val totalTimeTimer = timer("round-trip-total-time")
-  private val totalChunksMeter = metrics.meter("forwarder-total-chunks-transferred", "chunks")
+
   val tracedRequest = TracedRequest(request, totalTimeTimer)
 
   tracer.trace(tracedRequest.context) {
@@ -126,8 +126,6 @@ class ForwarderActor(pool: SprayConnectionPool,
       setTimeout()
 
       log.debug("Forwarder received MessageChunk")
-
-      totalChunksMeter.mark()
 
       client ! chunk
 
