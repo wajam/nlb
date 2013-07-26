@@ -8,6 +8,7 @@ import spray.util.SprayActorLogging
 import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
+import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
 class ForwarderActor(pool: SprayConnectionPool,
                      client: ActorRef,
@@ -48,7 +49,7 @@ class ForwarderActor(pool: SprayConnectionPool,
 
   clientActor ! (self, tracedRequest)
 
-  def receive = {
+  def receive = sanitizeHeaders andThen {
     case Terminated(_) =>
       /* When the connection from the pool dies (possible race),
          and we haven't transmitted anything yet,
@@ -91,7 +92,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       context.become(streaming)
   }
 
-  def streaming: Receive = {
+  def streaming: Receive = sanitizeHeaders andThen {
 
     case chunkEnd: ChunkedMessageEnd =>
       client ! chunkEnd
