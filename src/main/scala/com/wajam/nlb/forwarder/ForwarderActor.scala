@@ -8,6 +8,7 @@ import spray.util.SprayActorLogging
 import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
+import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
 class ForwarderActor(pool: SprayConnectionPool,
                      client: ActorRef,
@@ -21,7 +22,7 @@ class ForwarderActor(pool: SprayConnectionPool,
   log.debug("Starting forwarding response for {}...", request)
 
   val totalTimeTimer = timer("round-trip-total-time")
-  private val totalChunksMeter = metrics.meter("forwarder-total-chunks-transferred", "chunks")
+
   val tracedRequest = TracedRequest(request, totalTimeTimer)
 
   tracer.trace(tracedRequest.context) {
@@ -48,7 +49,7 @@ class ForwarderActor(pool: SprayConnectionPool,
 
   clientActor ! (self, tracedRequest)
 
-  def receive = {
+  def receive = sanitizeHeaders andThen {
     case Terminated(_) =>
       /* When the connection from the pool dies (possible race),
          and we haven't transmitted anything yet,
@@ -91,7 +92,7 @@ class ForwarderActor(pool: SprayConnectionPool,
       context.become(streaming)
   }
 
-  def streaming: Receive = {
+  def streaming: Receive = sanitizeHeaders andThen {
 
     case chunkEnd: ChunkedMessageEnd =>
       client ! chunkEnd
@@ -126,8 +127,6 @@ class ForwarderActor(pool: SprayConnectionPool,
       setTimeout()
 
       log.debug("Forwarder received MessageChunk")
-
-      totalChunksMeter.mark()
 
       client ! chunk
 

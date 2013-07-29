@@ -31,8 +31,9 @@ class ServerActor(pool: SprayConnectionPool, router: Router, forwarderIdleTimeou
     case _: Http.Connected =>
       sender ! Http.Register(self)
 
-    case healthCheck @ HttpRequest(GET, Uri.Path("/nlb_health"), _, _, _) =>
-      sender ! HttpResponse()
+    // health check
+    case HttpRequest(GET, Uri.Path("/nlb_health"), _, _, _) =>
+      sender ! HttpResponse(entity = HttpEntity("Ok"))
 
     case request: HttpRequest =>
       val client = sender
