@@ -1,14 +1,8 @@
 package com.wajam.nlb.test
 
-import akka.actor.{ActorRef, ActorLogging, Actor, ActorSystem}
-import com.typesafe.config.ConfigFactory
+import akka.actor.{ActorRef, ActorLogging, Actor}
 import akka.testkit.{ImplicitSender, TestKit}
 
-/**
- * User: Clément
- * Date: 2013-07-24
- * Time: 09:45
- */
 trait ActorProxy extends TestKit with ImplicitSender {
 
   /** Define proxy actors that will act as:

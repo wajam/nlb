@@ -9,8 +9,8 @@ import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, C
 import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.nrv.tracing.{TraceContext, RpcName, Annotation, Tracer}
-import com.wajam.nlb.util.TracedRequest
-import com.wajam.nlb.util.Timing
+import com.wajam.nlb.util.{TracedRequest, Timing}
+import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
 /**
  * Actor handling an HTTP connection with a specific node.
@@ -82,24 +82,26 @@ class ClientActor(destination: InetSocketAddress,
   }
 
   def waitForRequest: Receive = handleErrors orElse {
-    // Already connected, new request to send
-    case (newForwarder: ActorRef, request: TracedRequest) =>
-      // Bind the new forwarder
-      forwarder = Some(newForwarder)
+    sanitizeHeaders andThen {
+      // Already connected, new request to send
+      case (newForwarder: ActorRef, request: TracedRequest) =>
+        // Bind the new forwarder
+        forwarder = Some(newForwarder)
 
-      val subContext = request.context.map { context => tracer.createSubcontext(context) }
+        val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
-      tracer.trace(subContext) {
-        tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
-        tracer.record(Annotation.ClientAddress(request.address))
-      }
+        tracer.trace(subContext) {
+          tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
+          tracer.record(Annotation.ClientAddress(request.address))
+        }
 
-      clusterReplyTimer.start()
+        clusterReplyTimer.start()
 
-      server ! request.withNewContext(subContext).get
+        server ! request.withNewContext(subContext).get
 
-      context.become(waitForResponse(subContext))
-      log.debug("Received a new request to send")
+        context.become(waitForResponse(subContext))
+        log.debug("Received a new request to send")
+    }
   }
 
   def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
