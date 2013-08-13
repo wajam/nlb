@@ -32,7 +32,7 @@ class ServerActor(pool: SprayConnectionPool, router: Router, forwarderIdleTimeou
       sender ! Http.Register(self)
 
     // health check
-    case HttpRequest(GET, Uri.Path("/nlb_health"), _, _, _) =>
+    case HttpRequest(GET, Uri.Path("/health"), _, _, _) =>
       sender ! HttpResponse(entity = HttpEntity("Ok"))
 
     case request: HttpRequest =>
