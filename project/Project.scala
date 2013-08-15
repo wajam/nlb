@@ -25,25 +25,32 @@ object NlbBuild extends Build {
   )
 
   var commonDeps = Seq(
-    "org.slf4j" % "slf4j-api" % "1.6.4",
-    "org.slf4j" % "slf4j-log4j12" % "1.6.4",
-    "log4j" % "log4j" % "1.2.15" exclude("javax.jms", "jms") exclude("com.sun.jmx", "jmxri") exclude("com.sun.jdmk", "jmxtools"),
-    "nl.grons" %% "metrics-scala" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
-    "com.yammer.metrics" % "metrics-graphite" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
+    "nl.grons" %% "metrics-scala" % "2.2.0",
+    "com.yammer.metrics" % "metrics-graphite" % "2.2.0",
     "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
-    "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT" exclude("log4j", "log4j"),
-    "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT"  exclude("log4j", "log4j"),
+    "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT",
+    "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT",
     "org.scalatest" %% "scalatest" % "1.9.1" % "test,it",
     "junit" % "junit" % "4.11" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe" % "config" % "1.0.2",
     "com.typesafe.akka" %% "akka-actor" % "2.2.0",
     "com.typesafe.akka" %% "akka-testkit" % "2.2.0",
-    "com.typesafe.akka" %% "akka-slf4j" % "2.2.0" exclude("org.slf4j", "slf4j-api"),
-    "io.spray" % "spray-io" % "1.2-20130719",
-    "io.spray" % "spray-http" % "1.2-20130719",
-    "io.spray" % "spray-util" % "1.2-20130719",
-    "io.spray" % "spray-can" % "1.2-20130719"
+    "com.typesafe.akka" %% "akka-slf4j" % "2.2.0",
+    "io.spray" % "spray-io" % "1.2-20130801-WAJAM",
+    "io.spray" % "spray-http" % "1.2-20130801-WAJAM",
+    "io.spray" % "spray-util" % "1.2-20130801-WAJAM",
+    "io.spray" % "spray-can" % "1.2-20130801-WAJAM"
+  ).map { module =>
+    module.excludeAll(
+      ExclusionRule(organization = "org.slf4j"),
+      ExclusionRule(organization = "org.apache.logging.log4j"),
+      ExclusionRule(organization = "log4j")
+    )
+  } ++ Seq(
+    "org.slf4j" % "slf4j-api" % "1.6.4",
+    "org.slf4j" % "slf4j-log4j12" % "1.6.4",
+    "log4j" % "log4j" % "1.2.15" exclude("javax.jms", "jms") exclude("com.sun.jmx", "jmxri") exclude("com.sun.jdmk", "jmxtools")
   )
 
   val defaultSettings = Defaults.defaultSettings ++ Defaults.itSettings ++ Seq(
