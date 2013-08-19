@@ -47,7 +47,7 @@ class ForwarderActor(pool: SprayConnectionPool,
 
   log.debug("Routing to node {} using connection {}", destination, clientActor)
 
-  clientActor ! (self, tracedRequest)
+  clientActor ! (self, tracedRequest.withNewDestination(destination))
 
   def receive = sanitizeHeaders andThen {
     case Terminated(_) =>
