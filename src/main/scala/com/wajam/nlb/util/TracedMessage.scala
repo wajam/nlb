@@ -86,6 +86,7 @@ case class TracedRequest(get: HttpRequest, context: Option[TraceContext], timer:
   def address = new InetSocketAddress(get.uri.authority.host.address, get.uri.authority.port)
 
   def withNewContext(context: Option[TraceContext]) = copy(get = get.withHeaders(getNewContextHeaders(context)))
+  def withNewHost(destination: InetSocketAddress) = copy(get = SprayUtils.withNewHost(get, destination))
 }
 
 object TracedRequest extends TracedMessageFactory[HttpRequest] {

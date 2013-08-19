@@ -193,6 +193,10 @@ class ClientActor(destination: InetSocketAddress,
       forwarder ! msg
     }
   }
+
+  override def postStop(): Unit = {
+    openConnectionsCounter -= 1
+  }
 }
 
 object ClientActor {

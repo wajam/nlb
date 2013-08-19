@@ -4,8 +4,8 @@ import com.wajam.nrv.cluster.{Cluster, LocalNode, Node}
 import com.wajam.nrv.service.{ServiceMember, MemberStatus, Service, Resolver}
 import com.wajam.nrv.zookeeper.cluster.ZookeeperClusterManager
 import com.wajam.nrv.zookeeper.ZookeeperClient
+import com.wajam.nrv.Logging
 import scala.util.Random
-import org.slf4j._
 import java.net.{InetSocketAddress}
 import scala.annotation.tailrec
 import scala.util.matching.Regex
@@ -16,9 +16,7 @@ class Router(knownPaths: List[String],
              zookeeperServers: String,
              resolvingService: String,
              httpPort: Int,
-             localNodePort: Int) extends Instrumented {
-
-  private val log = LoggerFactory.getLogger("nlb.router.logger")
+             localNodePort: Int) extends Instrumented with Logging {
 
   private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
   private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")
