@@ -45,7 +45,7 @@ class TestSprayUtils extends FunSuite {
 
     val destination = new InetSocketAddress("endpoint.example.org", 8899)
 
-    val forwardedRequest = SprayUtils.withNewDestination(request, destination)
+    val forwardedRequest = SprayUtils.withNewHost(request, destination)
 
     forwardedRequest.headers should equal(
       List(new RawHeader(HOST, destination.getHostName + ":" + destination.getPort))

@@ -13,6 +13,8 @@ object SprayUtils {
     val USER_AGENT = "User-Agent"
     val CONNECTION = "Connection"
     val HOST = "Host"
+
+    val strippedHeaders = List(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
   }
 
   def sanitizeHeaders: PartialFunction[Any, Any] = {
@@ -49,18 +51,12 @@ object SprayUtils {
   }
 
   private def stripHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
-    import HttpHeaders._
+    import HttpHeaders.strippedHeaders
 
-    headers.filterNot { header =>
-      header.lowercaseName == CONTENT_TYPE.toLowerCase ||
-        header.lowercaseName == CONTENT_LENGTH.toLowerCase ||
-        header.lowercaseName == TRANSFER_ENCODING.toLowerCase ||
-        header.lowercaseName == USER_AGENT.toLowerCase ||
-        header.lowercaseName == CONNECTION.toLowerCase
-    }
+    headers.filterNot(header => strippedHeaders.map(_.toLowerCase).contains(header.lowercaseName))
   }
 
-  def withNewDestination(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
+  def withNewHost(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
     import HttpHeaders.HOST
 
     val newAuthority = request.uri.authority.copy(
@@ -68,7 +64,7 @@ object SprayUtils {
       port = destination.getPort
     )
     val newUri = request.uri.copy(authority = newAuthority)
-    val newHeaders = request.headers.filterNot(_.lowercaseName == HOST.toLowerCase) :+ new RawHeader(HOST, destination.getHostName + ":" + destination.getPort)
+    val newHeaders = new RawHeader(HOST, destination.getHostName + ":" + destination.getPort) :: request.headers.filterNot(_.lowercaseName == HOST.toLowerCase)
 
     request.copy(
       uri = newUri,
