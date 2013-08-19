@@ -1,5 +1,6 @@
 package com.wajam.nlb
 
+import scala.collection.JavaConversions._
 import akka.actor.{ActorSystem, Props}
 import akka.io.IO
 import scala.concurrent.duration._
@@ -13,12 +14,27 @@ import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
 import java.net.InetAddress
+import org.slf4j.LoggerFactory
 
 object Nlb extends App {
 
+  private val log = LoggerFactory.getLogger("nlb")
+
   implicit val system = ActorSystem("nlb")
 
-  implicit val config = new NlbConfiguration(ConfigFactory.load())
+  val globalConfig = ConfigFactory.load()
+
+  val hostname = java.net.InetAddress.getLocalHost().getHostName() + ":" + globalConfig.getInt("nlb.server.listen-port").toString()
+  val localConfig = Map(
+    "spray.can.server.default-host-header" -> hostname
+  )
+
+  log.info("Starting NLB with local configuration:")
+  localConfig.foreach { item =>
+    log.info(s"${item._1}=${item._2}")
+  }
+
+  implicit val config = new NlbConfiguration(globalConfig.withFallback(ConfigFactory.parseMap(localConfig)))
 
   val traceRecorder = if(config.isTraceEnabled) {
     config.getTraceRecorder match {

@@ -18,7 +18,7 @@ class Router(knownPaths: List[String],
              httpPort: Int,
              localNodePort: Int) extends Instrumented {
 
-  private val log = LoggerFactory.getLogger("nlb.router.logger")
+  private val log = LoggerFactory.getLogger("nlb.router")
 
   private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
   private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")
