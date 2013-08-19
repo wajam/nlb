@@ -14,7 +14,7 @@ object SprayUtils {
     val CONNECTION = "Connection"
     val HOST = "Host"
 
-    val strippedHeaders = List(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
+    val strippedHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION).map(_.toLowerCase)
   }
 
   def sanitizeHeaders: PartialFunction[Any, Any] = {
@@ -53,7 +53,7 @@ object SprayUtils {
   private def stripHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
     import HttpHeaders.strippedHeaders
 
-    headers.filterNot(header => strippedHeaders.map(_.toLowerCase).contains(header.lowercaseName))
+    headers.filterNot(header => strippedHeaders.contains(header.lowercaseName))
   }
 
   def withNewHost(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
