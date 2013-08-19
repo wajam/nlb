@@ -10,15 +10,13 @@ import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.Router
 import com.wajam.nrv.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
 import com.wajam.nrv.scribe.ScribeTraceRecorder
+import com.wajam.nrv.Logging
 import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
 import java.net.InetAddress
-import org.slf4j.LoggerFactory
 
-object Nlb extends App {
-
-  private val log = LoggerFactory.getLogger("nlb")
+object Nlb extends App with Logging {
 
   implicit val system = ActorSystem("nlb")
 
