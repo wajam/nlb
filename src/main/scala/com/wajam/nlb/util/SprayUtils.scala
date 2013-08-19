@@ -42,7 +42,8 @@ object SprayUtils {
       header.lowercaseName == "content-type" ||
         header.lowercaseName == "content-length" ||
         header.lowercaseName == "transfer-encoding" ||
-        header.lowercaseName == "user-agent"
+        header.lowercaseName == "user-agent" ||
+        header.lowercaseName == "connection"
     }
   }
 }
