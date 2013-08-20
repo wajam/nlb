@@ -3,12 +3,12 @@ package com.wajam.nlb.forwarder
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
-import akka.actor.{ActorRef, ActorSystem}
+import akka.actor.{Props, ActorRef, ActorSystem}
 import scala.concurrent.duration._
 import akka.testkit.{TestActorRef, ImplicitSender, TestKit}
 import com.wajam.nlb.test.ActorProxy
 import com.typesafe.config.ConfigFactory
-import com.wajam.nlb.client.{SprayConnectionPool, ClientActor}
+import com.wajam.nlb.client.SprayConnectionPool
 import akka.util.Timeout
 import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
 import java.net.InetSocketAddress
@@ -23,18 +23,7 @@ import spray.http.HttpResponse
 @RunWith(classOf[JUnitRunner])
 class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
 
-  def this() = {
-    this(ActorSystem("TestClientActor", ConfigFactory.parseString("""
-     akka.loglevel = DEBUG
-     akka.actor.debug {
-       receive = on
-       lifecycle = on
-     }
-     akka.event-handlers = ["akka.testkit.TestEventListener"]
-    """)))
-  }
-
-  var testId = 0
+  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.event-handlers = ["akka.testkit.TestEventListener"]""")))
 
   implicit val askTimeout = Timeout(5 seconds)
 
@@ -43,7 +32,7 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
   implicit val tracer = new Tracer(NullTraceRecorder)
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
-  val path = "test"
+  val path = "/test"
 
   val router = mock[Router]
   when(router.resolve(path)).thenReturn(destination)
@@ -69,16 +58,14 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
   case class ClientActorMessage(msg: Any)
 
   before {
-    clientRef = TestActorRef(new ClientProxyActor, "client" + testId)
-
-    clientActorRef = TestActorRef(new ClientActorProxyActor, "client-actor" + testId)
-
-    newClientActorRef = TestActorRef(new ClientActorProxyActor, "new-client-actor")
+    clientRef = TestActorRef(Props(new ClientProxyActor()))
+    clientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
+    newClientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
 
     when(pool.getNewConnection(destination)).thenReturn(newClientActorRef)
     when(pool.getConnection(destination)).thenReturn(clientActorRef)
 
-    forwarderRef = TestActorRef(new ForwarderActor(pool, clientRef, request, router, idleTimeout), "forwarder" + testId)
+    forwarderRef = TestActorRef(Props(new ForwarderActor(pool, clientRef, request, router, idleTimeout)))
 
     expectMsgPF() {
       // Check that the request is sent to ClientActor
@@ -87,11 +74,10 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
   }
 
   after {
-    testId += 1
-
-    _system.stop(clientRef)
-    _system.stop(clientActorRef)
-    _system.stop(forwarderRef)
+    clientRef.stop()
+    clientActorRef.stop()
+    newClientActorRef.stop()
+    forwarderRef.stop()
   }
 
   override def afterAll {

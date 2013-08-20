@@ -12,6 +12,12 @@ import akka.testkit.TestActorRef
 import akka.util.Timeout
 import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
 
+class DummyActor extends Actor {
+  def receive: Receive = {
+    case _ =>
+  }
+}
+
 @RunWith(classOf[JUnitRunner])
 class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoSugar {
   implicit val tracer = new Tracer(NullTraceRecorder)
@@ -23,20 +29,14 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   val connectionInitialTimeout = 1000
 
   var pool: SprayConnectionPool = _
-  var dummyConnectionActor: DummyConnection = _
-  var dummyConnectionRef: TestActorRef[DummyConnection] = _
+  var dummyConnectionActor: DummyActor = _
+  var dummyConnectionRef: TestActorRef[DummyActor] = _
   var currentTime = 0L
-
-  class DummyConnection extends Actor {
-    def receive: Receive = {
-      case _ =>
-    }
-  }
 
   before {
     pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 100, 200, system)
 
-    dummyConnectionRef = TestActorRef(new DummyConnection)
+    dummyConnectionRef = TestActorRef(new DummyActor)
     dummyConnectionActor = dummyConnectionRef.underlyingActor
   }
 
@@ -81,38 +81,22 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
 @RunWith(classOf[JUnitRunner])
 class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
   implicit val tracer = new Tracer(NullTraceRecorder)
-
   implicit var system: ActorSystem = _
   val destination = new InetSocketAddress("127.0.0.1", 9999)
-
   implicit val askTimeout: Timeout = 200 milliseconds
-
-  val connectionIdleTimeout = 5000
   val connectionInitialTimeout = 1000
-
   var pool: SprayConnectionPool = _
-  var connectionActor: Actor = _
-
-  var connectionRef: TestActorRef[ConnectionMockActor] = _
-
+  var connectionRef: TestActorRef[ClientActor] = _
   var poolSupervisorRef: TestActorRef[PoolSupervisor] = _
-
-  class ConnectionMockActor extends Actor {
-    def receive: Receive = {
-      case e: Exception =>
-        throw e
-    }
-  }
+  var IOconnector: TestActorRef[DummyActor] = _
 
   before {
     system = ActorSystem("TestPoolSupervisor")
-
     pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200, system)
-
     poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
-
-    connectionRef = TestActorRef(Props(new ConnectionMockActor), poolSupervisorRef, "connection-mock-actor")
-
+    IOconnector = TestActorRef(Props(new DummyActor()))
+    connectionRef = TestActorRef(Props(new ClientActor(destination, connectionInitialTimeout milliseconds, IOconnector)), poolSupervisorRef, "connection-mock-actor")
+    poolSupervisorRef.watch(connectionRef)
     pool.poolConnection(destination, connectionRef)
   }
 
@@ -121,10 +105,8 @@ class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
     system.awaitTermination()
   }
 
-  test("should kill a connection and remove it from the pool once it throws an exception") {
-    connectionRef ! new Exception
-
-    connectionRef.isTerminated should equal (true)
+  test("should kill a connection and remove it from the pool once it dies") {
+    connectionRef.stop()
 
     pool.getPooledConnection(destination) should equal (None)
   }

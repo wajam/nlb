@@ -8,11 +8,14 @@ import spray.http.{HttpHeader, HttpRequest}
 import spray.http.HttpHeaders.RawHeader
 import com.wajam.nrv.service.TraceHeader
 import com.wajam.nrv.tracing.{ConsoleTraceRecorder, Tracer, TraceContext}
+import org.scalatest.mock.MockitoSugar
 
 @RunWith(classOf[JUnitRunner])
-class TestTracedMessage extends FunSuite with BeforeAndAfter {
+class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
 
   implicit val tracer = new Tracer(ConsoleTraceRecorder)
+
+  val startStopTimer = mock[StartStopTimer]
 
   val traceId = "1234"
   val spanId = "5678"
@@ -29,7 +32,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
       new RawHeader(TraceHeader.Sampled.toString, sampled.get.toString)
     ))
 
-    val tracedRequest = TracedRequest(request, null)
+    val tracedRequest = TracedRequest(request, startStopTimer)
 
     val expectedTraceContext = Some(sampleContext)
 
@@ -39,7 +42,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
   test("should create a new context if context headers are not set") {
     val request = new HttpRequest()
 
-    val tracedRequest = TracedRequest(request, null)
+    val tracedRequest = TracedRequest(request, startStopTimer)
 
     tracedRequest.context should be ('defined)
   }
@@ -49,7 +52,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
       new RawHeader(TraceHeader.Sampled.toString, "true")
     ))
 
-    val tracedRequest = TracedRequest(request, null)
+    val tracedRequest = TracedRequest(request, startStopTimer)
 
     tracedRequest.context.get.sampled should equal (Some(true))
   }
@@ -57,7 +60,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter {
   test("should set trace context in request headers") {
     val request = new HttpRequest
 
-    val tracedRequest = TracedRequest(request, null).withNewContext(Some(sampleContext))
+    val tracedRequest = TracedRequest(request, startStopTimer).withNewContext(Some(sampleContext))
 
     tracedRequest.get.headers should {
       contain (new RawHeader(TraceHeader.TraceId.toString, traceId).asInstanceOf[HttpHeader]) and
