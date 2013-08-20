@@ -23,7 +23,7 @@ class Router(knownPaths: List[String],
   private val allDownMeter = metrics.meter("router-all-down", "failures")
   private val noResolvingNeeded = metrics.meter("router-no-resolving-needed", "queries")
 
-  val matchers = getMatchers(knownPaths)
+  val matchers = Router.getMatchers(knownPaths)
 
   log.info("Initialized Router with matchers:")
   matchers.foreach { matcher =>
@@ -38,39 +38,6 @@ class Router(knownPaths: List[String],
   cluster.registerService(service)
   cluster.applySupport(resolver = Some(new Resolver()))
   cluster.start()
-
-  private def getMatchers(paths: List[String]) = {
-    paths.map { path =>
-      val idMatcher = """:\w+"""
-
-      // Map /foo/:id/bar to /foo/(\w+)/.+
-      (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
-        // Map /foo/:id to /foo/(\w+)(?.+)?$
-        case result if result.equals(path) => (idMatcher + """$""").r replaceFirstIn(path, """(\\w+)(\\?.+)\?\$""") match {
-          case result if result.equals(path) => throw new Exception("Unable to parse specified path: " + path)
-          case result => result
-        }
-        case result => result
-      }
-    }.distinct.map(_.r)
-  }
-
-  @tailrec
-  private def getId(path: String, matchers: List[Regex] = matchers): Option[String] = {
-    matchers match {
-      case Nil => None
-      case matcher :: _ => {
-        matcher.findFirstMatchIn(path) match {
-          case Some(m: Match) => {
-            val id = m.group(1)
-            log.debug("Extracted id "+ id +" with matcher "+ matcher)
-            Some(id)
-          }
-          case _ => getId(path, matchers.tail)
-        }
-      }
-    }
-  }
 
   private def randomUpServiceMember: ServiceMember = {
     val members = service.members.filter(_.status == MemberStatus.Up)
@@ -90,7 +57,7 @@ class Router(knownPaths: List[String],
   }
 
   def resolve(path: String): InetSocketAddress = {
-    val node = getId(path) match {
+    val node = Router.getId(path, matchers) match {
       case Some(id) => {
         val token = Resolver.hashData(id)
         log.debug("Generated token "+ token)
@@ -115,3 +82,39 @@ class Router(knownPaths: List[String],
 }
 
 class ResolvingException(message: String) extends Exception(message)
+
+object Router extends Logging {
+
+  def getMatchers(paths: List[String]) = {
+    paths.map { path =>
+      val idMatcher = """:\w+"""
+
+      // Map /foo/:id/bar to /foo/(\w+)/.+
+      (idMatcher + """/.+""").r replaceFirstIn(path, """(\\w+)/.+""") match {
+        // Map /foo/:id to /foo/(\w+)(?.+)?$
+        case result if result.equals(path) => (idMatcher + """$""").r replaceFirstIn(path, """(\\w+)(\\?.+)\?\$""") match {
+          case result if result.equals(path) => throw new Exception("Unable to parse specified path: " + path)
+          case result => result
+        }
+        case result => result
+      }
+    }.distinct.map(_.r)
+  }
+
+  @tailrec
+  def getId(path: String, matchers: List[Regex]): Option[String] = {
+    matchers match {
+      case Nil => None
+      case matcher :: _ => {
+        matcher.findFirstMatchIn(path) match {
+          case Some(m: Match) => {
+            val id = m.group(1)
+            log.debug("Extracted id "+ id +" with matcher "+ matcher)
+            Some(id)
+          }
+          case _ => getId(path, matchers.tail)
+        }
+      }
+    }
+  }
+}

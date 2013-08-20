@@ -8,7 +8,6 @@ class StartStopTimer(timer: Timer, timeUnit: TimeUnit = TimeUnit.MILLISECONDS) {
 
   def start() {
     startTime = System.currentTimeMillis()
-    this
   }
 
   def stop() {
