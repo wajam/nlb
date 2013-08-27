@@ -11,6 +11,7 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 import com.yammer.metrics.scala.Instrumented
+import org.slf4j.LoggerFactory
 
 class Router(knownPaths: List[String],
              zookeeperServers: String,
