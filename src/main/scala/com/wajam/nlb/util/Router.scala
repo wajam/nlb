@@ -20,6 +20,8 @@ class Router(knownPaths: List[String],
 
   private val log = LoggerFactory.getLogger("nlb.router.logger")
 
+  private val resolvingLog = LoggerFactory.getLogger("nlb.router.resolving.logger")
+
   private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
   private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")
   private val allDownMeter = metrics.meter("router-all-down", "failures")
@@ -100,16 +102,21 @@ class Router(knownPaths: List[String],
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
           case Some(member) =>
             resolvedUpMeter.mark()
+            resolvingLog.debug(path + " " + token + " " + member.node.host.getHostName + " up")
             member.node
           case _ =>
             resolvedDownMeter.mark()
-            randomUpServiceMember.node
+            val randomNode = randomUpServiceMember.node
+            resolvingLog.debug(path + " " + token + " " + randomNode.host.getHostName + " down")
+            randomNode
         }
       }
       case _ => {
         log.debug("Couldn't extract id from path "+ path +", routing randomly")
         noResolvingNeeded.mark()
-        randomUpServiceMember.node
+        val randomNode = randomUpServiceMember.node
+        resolvingLog.debug(path + " none " + randomNode.host.getHostName + " random")
+        randomNode
       }
     }
     nodeToInet(node)
