@@ -80,8 +80,8 @@ class NlbConfiguration(config: Config) {
     config.getInt("nlb.trace.scribe.port")
   }
 
-  def getTraceScribeSamplingRate: Int = {
-    config.getInt("nlb.trace.scribe.sampling-rate")
+  def getTraceSamplingRate: Int = {
+    config.getInt("nlb.trace.sampling-rate")
   }
 
   def getForwarderIdleTimeout: Long = {

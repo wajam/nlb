@@ -72,7 +72,7 @@ trait TracedMessageFactory[T <: HttpMessage] {
 
     extractContext(message.headers, context) match {
       case TraceContext(traceId, spanId, _, sampled) if traceId.isEmpty || spanId.isEmpty =>
-        Some(tracer.createContext(sampled))
+        Some(tracer.createRootContext(sampled))
       case context =>
         Some(context)
     }
