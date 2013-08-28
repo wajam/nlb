@@ -37,7 +37,7 @@ object Nlb extends App with Logging {
   val traceRecorder = if(config.isTraceEnabled) {
     config.getTraceRecorder match {
       case "scribe" =>
-        new ScribeTraceRecorder(config.getTraceScribeHost, config.getTraceScribePort, config.getTraceScribeSamplingRate)
+        new ScribeTraceRecorder(config.getTraceScribeHost, config.getTraceScribePort)
       case "logger" =>
         LoggingTraceRecorder
       case "console" =>
@@ -57,7 +57,7 @@ object Nlb extends App with Logging {
         "%s_%d".format(InetAddress.getLocalHost.getHostName.replace(".", "-"), config.getServerListenPort))
   }
 
-  implicit val tracer = new Tracer(traceRecorder)
+  implicit val tracer = new Tracer(traceRecorder, samplingRate = config.getTraceSamplingRate)
 
   val router = new Router(config.getKnownPaths,
                           config.getZookeeperServers,
