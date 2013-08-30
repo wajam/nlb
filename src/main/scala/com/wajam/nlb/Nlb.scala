@@ -19,12 +19,12 @@ import spray.http.HttpHeaders.Host
 
 object Nlb extends App with Logging {
 
-  implicit val system = ActorSystem("nlb")
-
   val defaultConfig = ConfigFactory.load("reference")
   val applicationConfig = ConfigFactory.load("application").withFallback(defaultConfig)
 
   val config = new NlbConfiguration(applicationConfig)
+
+  implicit val system = ActorSystem("nlb", applicationConfig)
 
   val hostname = InetAddress.getLocalHost.getHostName
 
