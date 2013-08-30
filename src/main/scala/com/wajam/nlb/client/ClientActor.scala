@@ -4,7 +4,6 @@ import java.net.InetSocketAddress
 import akka.actor._
 import scala.concurrent.duration._
 import spray.can.Http
-import spray.util.SprayActorLogging
 import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
@@ -18,9 +17,16 @@ import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
  * @param destination the destination node
  * @param IOconnector the actor handling the underlying connection (usually IO(Http), except when testing)
  */
-class ClientActor(destination: InetSocketAddress,
-                  initialTimeout: Duration,
-                  IOconnector: ActorRef)(implicit tracer: Tracer) extends Actor with SprayActorLogging with Instrumented with Timing {
+class ClientActor(
+    destination: InetSocketAddress,
+    initialTimeout: Duration,
+    IOconnector: ActorRef)
+    (implicit tracer: Tracer)
+  extends Actor
+  with ActorLogging
+  with Instrumented
+  with Timing {
+
   import context.system
 
   private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
