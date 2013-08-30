@@ -2,22 +2,10 @@ package com.wajam.nlb
 
 import com.typesafe.config._
 import scala.collection.JavaConversions._
-import com.typesafe.config.ConfigException.Missing
 
 class NlbConfiguration(config: Config) {
-
-  def optional[T](getter: => T, fallback: T): T = {
-    try {
-      getter
-    }
-    catch {
-      case e: Missing   => fallback
-      case e: Exception => throw e
-    }
-  }
-
   def getEnvironment: String = {
-    optional(config.getString("nlb.environment"), "local")
+    config.getString("nlb.environment")
   }
 
   def getZookeeperServers: String = {
@@ -29,15 +17,15 @@ class NlbConfiguration(config: Config) {
   }
 
   def getNodeHttpPort: Int = {
-    optional(config.getInt("nlb.node.http-port"), 8899)
+    config.getInt("nlb.node.http-port")
   }
 
   def getLocalNodePort: Int = {
-    optional(config.getInt("nlb.resolving.localnode-port"), 9701)
+    config.getInt("nlb.resolving.localnode-port")
   }
 
   def getAskTimeout: Long = {
-    optional(config.getMilliseconds("nlb.ask-timeout"), 200)
+    config.getMilliseconds("nlb.ask-timeout")
   }
 
   def getKnownPaths: List[String] = {
@@ -45,7 +33,7 @@ class NlbConfiguration(config: Config) {
   }
 
   def getServerListenInterface: String = {
-    optional(config.getString("nlb.server.listen-interface"), "0.0.0.0")
+    config.getString("nlb.server.listen-interface")
   }
 
   def getServerListenPort: Int = {
@@ -53,11 +41,11 @@ class NlbConfiguration(config: Config) {
   }
 
   def getClientInitialTimeout: Long = {
-    optional(config.getMilliseconds("nlb.client.initial-timeout"), 1000)
+    config.getMilliseconds("nlb.client.initial-timeout")
   }
 
   def getConnectionPoolMaxSize: Int = {
-    optional(config.getInt("nlb.connection-pool.max-size"), 100)
+    config.getInt("nlb.connection-pool.max-size")
   }
 
   def getGraphiteServerAddress: String = {
@@ -73,15 +61,15 @@ class NlbConfiguration(config: Config) {
   }
 
   def isGraphiteEnabled: Boolean = {
-    optional(config.getBoolean("nlb.graphite.enabled"), false)
+    config.getBoolean("nlb.graphite.enabled")
   }
 
   def isTraceEnabled: Boolean = {
-    optional(config.getBoolean("nlb.trace.enabled"), true)
+    config.getBoolean("nlb.trace.enabled")
   }
 
   def getTraceRecorder: String = {
-    optional(config.getString("nlb.trace.recorder"), "console")
+    config.getString("nlb.trace.recorder")
   }
 
   def getTraceScribeHost: String = {
@@ -93,10 +81,10 @@ class NlbConfiguration(config: Config) {
   }
 
   def getTraceSamplingRate: Int = {
-    optional(config.getInt("nlb.trace.sampling-rate"), 1000)
+    config.getInt("nlb.trace.sampling-rate")
   }
 
   def getForwarderIdleTimeout: Long = {
-    optional(config.getMilliseconds("nlb.forwarder.idle-timeout"), 5000)
+    config.getMilliseconds("nlb.forwarder.idle-timeout")
   }
 }
