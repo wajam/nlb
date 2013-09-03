@@ -1,6 +1,5 @@
 package com.wajam.nlb
 
-import scala.collection.JavaConversions._
 import akka.actor.{ActorSystem, Props}
 import akka.io.IO
 import scala.concurrent.duration._
@@ -15,24 +14,19 @@ import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
 import java.net.InetAddress
+import spray.can.server.ServerSettings
+import spray.http.HttpHeaders.Host
 
 object Nlb extends App with Logging {
 
-  implicit val system = ActorSystem("nlb")
+  val defaultConfig = ConfigFactory.load("reference")
+  val applicationConfig = ConfigFactory.load("application").withFallback(defaultConfig)
 
-  val globalConfig = ConfigFactory.load()
+  val config = new NlbConfiguration(applicationConfig)
 
-  val hostname = java.net.InetAddress.getLocalHost().getHostName() + ":" + globalConfig.getInt("nlb.server.listen-port").toString()
-  val localConfig = Map(
-    "spray.can.server.default-host-header" -> hostname
-  )
+  implicit val system = ActorSystem("nlb", applicationConfig)
 
-  log.info("Starting NLB with local configuration:")
-  localConfig.foreach { item =>
-    log.info(s"${item._1}=${item._2}")
-  }
-
-  implicit val config = new NlbConfiguration(globalConfig.withFallback(ConfigFactory.parseMap(localConfig)))
+  val hostname = InetAddress.getLocalHost.getHostName
 
   val traceRecorder = if(config.isTraceEnabled) {
     config.getTraceRecorder match {
@@ -54,7 +48,7 @@ object Nlb extends App with Logging {
       config.getGraphiteUpdatePeriodInSec, TimeUnit.SECONDS,
       config.getGraphiteServerAddress, config.getGraphiteServerPort,
       config.getEnvironment + ".nlb." +
-        "%s_%d".format(InetAddress.getLocalHost.getHostName.replace(".", "-"), config.getServerListenPort))
+        "%s_%d".format(hostname.replace(".", "-"), config.getServerListenPort))
   }
 
   implicit val tracer = new Tracer(traceRecorder, samplingRate = config.getTraceSamplingRate)
@@ -72,6 +66,15 @@ object Nlb extends App with Logging {
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(Props(ServerActor(pool, router, forwarderIdleTimeout)), name = "ServerHandler")
 
-  IO(Http) ! Http.Bind(handler, interface = config.getServerListenInterface, port = config.getServerListenPort)
+  log.info("Dynamically setting server hostname: " + hostname)
+
+  val serverSettings = ServerSettings(system).copy(
+    defaultHostHeader = Host(
+      hostname,
+      config.getServerListenPort
+    )
+  )
+
+  IO(Http) ! Http.Bind(handler, interface = config.getServerListenInterface, port = config.getServerListenPort, settings = Some(serverSettings))
 
 }
