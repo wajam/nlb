@@ -69,4 +69,6 @@ object NlbBuild extends Build {
     .settings(testOptions in IntegrationTest := Seq(Tests.Filter(s => s.contains("Test"))))
     .settings(parallelExecution in IntegrationTest := false)
     .settings(SbtStartScript.startScriptForClassesSettings: _*)
+    .settings(unmanagedClasspath in Runtime <+= (baseDirectory) map { bd => Attributed.blank(bd / "etc") })
+
 }
