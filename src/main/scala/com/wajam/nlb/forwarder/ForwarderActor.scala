@@ -10,14 +10,16 @@ import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
-class ForwarderActor(pool: SprayConnectionPool,
-                     client: ActorRef,
-                     request: HttpRequest,
-                     router: Router,
-                     idleTimeout: Duration)(implicit tracer: Tracer)
-    extends Actor
-    with ActorLogging
-    with Timing {
+class ForwarderActor(
+    pool: SprayConnectionPool,
+    client: ActorRef,
+    request: HttpRequest,
+    router: Router,
+    idleTimeout: Duration)
+    (implicit tracer: Tracer)
+  extends Actor
+  with ActorLogging
+  with Timing {
 
   log.debug("Starting forwarding response for {}...", request)
 
