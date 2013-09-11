@@ -4,22 +4,26 @@ import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef}
 import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
-import spray.util.SprayActorLogging
+import akka.actor.ActorLogging
 import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
-class ForwarderActor(pool: SprayConnectionPool,
-                     client: ActorRef,
-                     request: HttpRequest,
-                     router: Router,
-                     idleTimeout: Duration)(implicit tracer: Tracer)
-    extends Actor
-    with SprayActorLogging
-    with Timing {
+class ForwarderActor(
+    pool: SprayConnectionPool,
+    client: ActorRef,
+    request: HttpRequest,
+    router: Router,
+    idleTimeout: Duration)
+    (implicit tracer: Tracer)
+  extends Actor
+  with ActorLogging
+  with Timing {
 
   log.debug("Starting forwarding response for {}...", request)
+
+  private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
 
   val totalTimeTimer = timer("round-trip-total-time")
 
@@ -30,11 +34,7 @@ class ForwarderActor(pool: SprayConnectionPool,
     tracer.record(Annotation.ServerAddress(tracedRequest.address))
   }
 
-  val destination = tracer.trace(tracedRequest.context) {
-    tracer.time("Resolving destination") {
-      router.resolve(tracedRequest.path)
-    }
-  }
+  val destination = router.resolve(tracedRequest.path)
 
   // clientActor is the actor handling the connection with the server
   // Not to be mistaken with client, which is *our* client
@@ -57,6 +57,8 @@ class ForwarderActor(pool: SprayConnectionPool,
       val fallbackClientActor = pool.getNewConnection(destination)
       fallbackClientActor ! (self, tracedRequest)
 
+      connectionFallbacksMeter.mark()
+
     case ReceiveTimeout =>
       log.warning("Forwarder initial timeout")
       context.stop(self)
@@ -73,7 +75,6 @@ class ForwarderActor(pool: SprayConnectionPool,
         log.debug("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
-      tracedRequest.timer.stop()
       context.stop(self)
 
     case responseStart: ChunkedResponseStart =>
