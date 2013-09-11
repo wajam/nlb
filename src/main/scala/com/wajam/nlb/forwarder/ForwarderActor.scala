@@ -30,11 +30,7 @@ class ForwarderActor(pool: SprayConnectionPool,
     tracer.record(Annotation.ServerAddress(tracedRequest.address))
   }
 
-  val destination = tracer.trace(tracedRequest.context) {
-    tracer.time("Resolving destination") {
-      router.resolve(tracedRequest.path)
-    }
-  }
+  val destination = router.resolve(tracedRequest.path)
 
   // clientActor is the actor handling the connection with the server
   // Not to be mistaken with client, which is *our* client
