@@ -23,6 +23,8 @@ class ForwarderActor(
 
   log.debug("Starting forwarding response for {}...", request)
 
+  private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
+
   val totalTimeTimer = timer("round-trip-total-time")
 
   val tracedRequest = TracedRequest(request, totalTimeTimer)
@@ -54,6 +56,8 @@ class ForwarderActor(
          we fallback on a brand new connection */
       val fallbackClientActor = pool.getNewConnection(destination)
       fallbackClientActor ! (self, tracedRequest)
+
+      connectionFallbacksMeter.mark()
 
     case ReceiveTimeout =>
       log.warning("Forwarder initial timeout")
