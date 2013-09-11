@@ -71,7 +71,6 @@ class ForwarderActor(
         log.debug("Pooling connection")
         pool.poolConnection(destination, clientActor)
       }
-      tracedRequest.timer.stop()
       context.stop(self)
 
     case responseStart: ChunkedResponseStart =>
