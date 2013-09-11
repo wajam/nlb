@@ -4,7 +4,7 @@ import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef}
 import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
-import spray.util.SprayActorLogging
+import akka.actor.ActorLogging
 import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
@@ -16,7 +16,7 @@ class ForwarderActor(pool: SprayConnectionPool,
                      router: Router,
                      idleTimeout: Duration)(implicit tracer: Tracer)
     extends Actor
-    with SprayActorLogging
+    with ActorLogging
     with Timing {
 
   log.debug("Starting forwarding response for {}...", request)
