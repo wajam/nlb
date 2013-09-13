@@ -39,9 +39,9 @@ class ServerActor(
       sender ! HttpResponse(entity = HttpEntity("Ok"))
 
     case request: HttpRequest =>
-      val client = sender
+      val forwarder = context actorOf Props(classOf[ForwarderActor], pool, router, forwarderIdleTimeout, tracer)
 
-      context actorOf Props(ForwarderActor(pool, client, request, router, forwarderIdleTimeout))
+      forwarder forward request
 
       incomingRequestsMeter.mark()
   }

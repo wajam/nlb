@@ -49,7 +49,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   var serverRef: TestActorRef[Actor] = _
   var server: Actor = _
 
-  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.event-handlers = ["akka.testkit.TestEventListener"]""")))
+  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
 
   class RouterProxyActor extends ProxyActor {
     def wrap(msg: Any) = RouterMessage(msg)

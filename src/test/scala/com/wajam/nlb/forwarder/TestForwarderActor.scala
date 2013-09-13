@@ -23,7 +23,7 @@ import spray.http.HttpResponse
 @RunWith(classOf[JUnitRunner])
 class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
 
-  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.event-handlers = ["akka.testkit.TestEventListener"]""")))
+  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
 
   implicit val askTimeout = Timeout(5 seconds)
 
@@ -65,7 +65,9 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
     when(pool.getNewConnection(destination)).thenReturn(newClientActorRef)
     when(pool.getConnection(destination)).thenReturn(clientActorRef)
 
-    forwarderRef = TestActorRef(Props(new ForwarderActor(pool, clientRef, request, router, idleTimeout)))
+    forwarderRef = TestActorRef(Props(new ForwarderActor(pool, router, idleTimeout, tracer)))
+
+    clientRef ! TellTo(forwarderRef, request)
 
     expectMsgPF() {
       // Check that the request is sent to ClientActor
