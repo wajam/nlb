@@ -11,15 +11,12 @@ import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match
 import com.yammer.metrics.scala.Instrumented
-import org.slf4j.LoggerFactory
 
 class Router(knownPaths: List[String],
              zookeeperServers: String,
              resolvingService: String,
              httpPort: Int,
              localNodePort: Int) extends Instrumented with Logging {
-
-  private val resolvingLog = LoggerFactory.getLogger("com.wajam.nlb.util.Router.resolving")
 
   private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
   private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")
@@ -68,12 +65,10 @@ class Router(knownPaths: List[String],
         cluster.resolver.resolve(service, token).selectedReplicas.headOption match {
           case Some(member) =>
             resolvedUpMeter.mark()
-            resolvingLog.debug(path + " " + token + " " + member.node.host.getHostName + " up")
             member.node
           case _ =>
             resolvedDownMeter.mark()
             val randomNode = randomUpServiceMember.node
-            resolvingLog.debug(path + " " + token + " " + randomNode.host.getHostName + " down")
             randomNode
         }
       }
@@ -81,7 +76,6 @@ class Router(knownPaths: List[String],
         log.debug("Couldn't extract id from path "+ path +", routing randomly")
         noResolvingNeeded.mark()
         val randomNode = randomUpServiceMember.node
-        resolvingLog.debug(path + " none " + randomNode.host.getHostName + " random")
         randomNode
       }
     }
