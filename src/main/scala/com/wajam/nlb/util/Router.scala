@@ -19,7 +19,7 @@ class Router(knownPaths: List[String],
              httpPort: Int,
              localNodePort: Int) extends Instrumented with Logging {
 
-  private val resolvingLog = LoggerFactory.getLogger("nlb.router.resolving.logger")
+  private val resolvingLog = LoggerFactory.getLogger("com.wajam.nlb.util.Router.resolving")
 
   private val resolvedUpMeter = metrics.meter("router-resolving-up", "resolvings")
   private val resolvedDownMeter = metrics.meter("router-resolving-down", "resolvings")

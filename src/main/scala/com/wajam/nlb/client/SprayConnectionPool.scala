@@ -11,10 +11,10 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import akka.util.Timeout
 import akka.pattern.ask
-import org.slf4j.LoggerFactory
 import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.nrv.tracing.Tracer
+import com.wajam.nrv.Logging
 
 /**
  * Supervisor of all connection actors.
@@ -47,11 +47,14 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
  *
  * @param maxSize the maximum amount of connections allowed in the pool
  */
-class SprayConnectionPool(connectionInitialTimeout: Duration,
-                          maxSize: Int,
-                          askTimeout: Long,
-                          implicit val system: ActorSystem)(implicit tracer: Tracer) extends Instrumented {
-  private val log = LoggerFactory.getLogger("nlb.connectionpool.logger")
+class SprayConnectionPool(
+    connectionInitialTimeout: Duration,
+    maxSize: Int,
+    askTimeout: Long,
+    implicit val system: ActorSystem)
+    (implicit tracer: Tracer)
+  extends Instrumented
+  with Logging {
 
   implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
