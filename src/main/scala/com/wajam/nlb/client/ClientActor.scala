@@ -58,6 +58,9 @@ class ClientActor(
 
   def receive = {
     case request: TracedRequest =>
+      // Clear timeout
+      context.setReceiveTimeout(Duration.Undefined)
+
       // start by establishing a new HTTP connection
       this.forwarder = Some(sender)
       this.request = request
