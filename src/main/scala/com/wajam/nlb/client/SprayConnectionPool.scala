@@ -50,9 +50,9 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 class SprayConnectionPool(
     connectionInitialTimeout: Duration,
     maxSize: Int,
-    askTimeout: Long,
-    implicit val system: ActorSystem)
-    (implicit tracer: Tracer)
+    askTimeout: Long)
+    (implicit system: ActorSystem,
+    tracer: Tracer)
   extends Instrumented
   with Logging {
 

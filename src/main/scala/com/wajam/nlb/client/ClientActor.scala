@@ -21,13 +21,11 @@ class ClientActor(
     destination: InetSocketAddress,
     initialTimeout: Duration,
     IOconnector: ActorRef,
-    tracer: Tracer)
+    implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented
   with Timing {
-
-  implicit val implicitTracer = tracer
 
   import context.system
 

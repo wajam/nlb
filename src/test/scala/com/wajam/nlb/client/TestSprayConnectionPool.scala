@@ -34,7 +34,7 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   var currentTime = 0L
 
   before {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 100, 200, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 100, 200)
 
     dummyConnectionRef = TestActorRef(new DummyActor)
     dummyConnectionActor = dummyConnectionRef.underlyingActor
@@ -56,14 +56,14 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
   }
 
   test("should reject if max size is reached") {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
   }
 
   test("should allow if size less than maximum") {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
 
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
@@ -92,7 +92,7 @@ class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
 
   before {
     system = ActorSystem("TestPoolSupervisor")
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200, system)
+    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
     poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
     IOconnector = TestActorRef(Props(new DummyActor()))
     connectionRef = TestActorRef(ClientActor.props(destination, connectionInitialTimeout milliseconds, IOconnector), poolSupervisorRef, "connection-mock-actor")

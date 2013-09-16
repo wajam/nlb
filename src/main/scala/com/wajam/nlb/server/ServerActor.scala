@@ -16,12 +16,10 @@ class ServerActor(
     pool: SprayConnectionPool,
     router: Router,
     forwarderIdleTimeout: Duration,
-    tracer: Tracer)
+    implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented {
-
-  implicit val implicitTracer = tracer
 
   private val incomingRequestsMeter = metrics.meter("server-incoming-requests", "requests")
 

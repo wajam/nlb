@@ -14,15 +14,12 @@ class ForwarderActor(
     pool: SprayConnectionPool,
     router: Router,
     idleTimeout: Duration,
-    tracer: Tracer)
+    implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Timing {
 
   private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
-
-  /* Tracer cannot be passed implicitly because Props does not support implicits */
-  implicit val implicitTracer = tracer
 
   def receive = {
     case request: HttpRequest =>
