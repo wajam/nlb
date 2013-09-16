@@ -20,8 +20,8 @@ import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 class ClientActor(
     destination: InetSocketAddress,
     initialTimeout: Duration,
-    IOconnector: ActorRef)
-    (implicit tracer: Tracer)
+    IOconnector: ActorRef,
+    implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented
@@ -55,9 +55,12 @@ class ClientActor(
    */
 
   def receive = {
-    case (forwarder: ActorRef, request: TracedRequest) =>
+    case request: TracedRequest =>
+      // Clear timeout
+      context.setReceiveTimeout(Duration.Undefined)
+
       // start by establishing a new HTTP connection
-      this.forwarder = Some(forwarder)
+      this.forwarder = Some(sender)
       this.request = request
 
       context.become(connect)
@@ -75,7 +78,7 @@ class ClientActor(
       // once connected, we can send the request across the connection
       server = sender
       context.become(waitForRequest)
-      self ! (forwarder.get, request)
+      self ! request
       openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
@@ -90,9 +93,10 @@ class ClientActor(
   def waitForRequest: Receive = handleErrors orElse {
     sanitizeHeaders andThen {
       // Already connected, new request to send
-      case (newForwarder: ActorRef, request: TracedRequest) =>
+      case request: TracedRequest =>
         // Bind the new forwarder
-        forwarder = Some(newForwarder)
+        if(sender != self)
+          forwarder = Some(sender)
 
         val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
@@ -206,9 +210,11 @@ class ClientActor(
 }
 
 object ClientActor {
-  def apply(destination: InetSocketAddress,
-            initialTimeout: Duration,
-            IOconnector: ActorRef)(implicit tracer: Tracer) = new ClientActor(destination, initialTimeout, IOconnector)
+  def props(
+      destination: InetSocketAddress,
+      initialTimeout: Duration,
+      IOconnector: ActorRef)
+      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, initialTimeout, IOconnector, tracer)
 }
 
 /**
