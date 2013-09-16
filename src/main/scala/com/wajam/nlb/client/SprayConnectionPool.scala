@@ -118,7 +118,7 @@ class SprayConnectionPool(
 
   // Get a new connection
   def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    val future = poolSupervisor ? Props(ClientActor(destination, connectionInitialTimeout, IO(Http)))
+    val future = poolSupervisor ? ClientActor.props(destination, connectionInitialTimeout, IO(Http))
     connectionPoolCreatesMeter.mark()
     Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
   }

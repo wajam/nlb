@@ -1,10 +1,9 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef}
+import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
-import akka.actor.ActorLogging
 import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
@@ -164,3 +163,11 @@ class ForwarderActor(
   }
 }
 
+object ForwarderActor {
+
+  def props(
+      pool: SprayConnectionPool,
+      router: Router,
+      idleTimeout: Duration)
+      (implicit tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, idleTimeout, tracer)
+}

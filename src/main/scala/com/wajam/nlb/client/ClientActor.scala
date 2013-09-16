@@ -20,12 +20,14 @@ import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 class ClientActor(
     destination: InetSocketAddress,
     initialTimeout: Duration,
-    IOconnector: ActorRef)
-    (implicit tracer: Tracer)
+    IOconnector: ActorRef,
+    tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented
   with Timing {
+
+  implicit val implicitTracer = tracer
 
   import context.system
 
@@ -207,9 +209,11 @@ class ClientActor(
 }
 
 object ClientActor {
-  def apply(destination: InetSocketAddress,
-            initialTimeout: Duration,
-            IOconnector: ActorRef)(implicit tracer: Tracer) = new ClientActor(destination, initialTimeout, IOconnector)
+  def props(
+      destination: InetSocketAddress,
+      initialTimeout: Duration,
+      IOconnector: ActorRef)
+      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, initialTimeout, IOconnector, tracer)
 }
 
 /**

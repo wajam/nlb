@@ -70,7 +70,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     connectorRef = TestActorRef(new ConnectorProxyActor, "connector" + testId)
     connector = connectorRef.underlyingActor
 
-    clientRef = TestActorRef(ClientActor(destination, clientInitialTimeout, connectorRef), "client" + testId)
+    clientRef = TestActorRef(ClientActor.props(destination, clientInitialTimeout, connectorRef), "client" + testId)
     client = clientRef.underlyingActor
 
     routerRef = TestActorRef(new RouterProxyActor, "router" + testId)
