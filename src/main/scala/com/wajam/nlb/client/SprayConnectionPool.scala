@@ -21,7 +21,7 @@ import com.wajam.nrv.tracing.Tracer
  * Actors are killed as soon as they throw an exception, since they only throw exceptions when their HTTP connection dies.
  * They are watched at all times, even when they are not in the pool (in that case, pool.remove would have no effect).
  */
-class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
+class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogging {
 
   // Stop the actor on any exception
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {

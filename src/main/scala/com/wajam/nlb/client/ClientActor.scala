@@ -55,9 +55,9 @@ class ClientActor(
    */
 
   def receive = {
-    case (forwarder: ActorRef, request: TracedRequest) =>
+    case request: TracedRequest =>
       // start by establishing a new HTTP connection
-      this.forwarder = Some(forwarder)
+      this.forwarder = Some(sender)
       this.request = request
 
       context.become(connect)
@@ -75,7 +75,7 @@ class ClientActor(
       // once connected, we can send the request across the connection
       server = sender
       context.become(waitForRequest)
-      self ! (forwarder.get, request)
+      self ! request
       openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
@@ -90,9 +90,10 @@ class ClientActor(
   def waitForRequest: Receive = handleErrors orElse {
     sanitizeHeaders andThen {
       // Already connected, new request to send
-      case (newForwarder: ActorRef, request: TracedRequest) =>
+      case request: TracedRequest =>
         // Bind the new forwarder
-        forwarder = Some(newForwarder)
+        if(sender != self)
+          forwarder = Some(sender)
 
         val subContext = request.context.map { context => tracer.createSubcontext(context) }
 

@@ -53,7 +53,7 @@ class ForwarderActor(
 
       log.debug("Routing to node {} using connection {}", destination, clientConnection)
 
-      clientConnection ! (self, tracedRequest)
+      clientConnection ! tracedRequest
 
       context.become(
         waitForResponse(client, destination, tracedRequest, clientConnection)
@@ -73,7 +73,7 @@ class ForwarderActor(
          and we haven't transmitted anything yet,
          we fallback on a brand new connection */
       val fallbackClientConnection = pool.getNewConnection(destination)
-      fallbackClientConnection ! (self, tracedRequest)
+      fallbackClientConnection ! tracedRequest
 
       connectionFallbacksMeter.mark()
 

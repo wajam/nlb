@@ -95,7 +95,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should connect to the server") {
-    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
+    routerRef ! TellTo(clientRef, TRACED_REQUEST)
 
     expectMsgPF() {
       case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] =>
@@ -103,7 +103,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should send the appropriate request to the server") {
-    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
+    routerRef ! TellTo(clientRef, TRACED_REQUEST)
 
     expectMsgPF() {
       // Send connection confirmation
@@ -117,7 +117,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
   }
 
   test("should forward the response to the router when receiving an HttpResponse from the server") {
-    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
+    routerRef ! TellTo(clientRef, TRACED_REQUEST)
 
     expectMsgPF() {
       // Send connection ACK
@@ -138,7 +138,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     val messageChunk = new MessageChunk(Array[Byte](1, 0), "")
     val chunkEnd = ChunkedMessageEnd()
 
-    routerRef ! TellTo(clientRef, (routerRef, TRACED_REQUEST))
+    routerRef ! TellTo(clientRef, TRACED_REQUEST)
 
     expectMsgPF() {
       // Send connection ACK

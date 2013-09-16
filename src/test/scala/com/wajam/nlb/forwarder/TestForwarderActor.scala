@@ -71,7 +71,7 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
 
     expectMsgPF() {
       // Check that the request is sent to ClientActor
-      case ClientActorMessage(msg) if msg.isInstanceOf[(ActorRef, TracedRequest)] =>
+      case ClientActorMessage(msg) if msg.isInstanceOf[TracedRequest] =>
     }
   }
 
@@ -92,7 +92,7 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
 
     expectMsgPF() {
       // Check that the request is sent to the new ClientActor
-      case ClientActorMessage(msg) if msg.isInstanceOf[(ActorRef, TracedRequest)] =>
+      case ClientActorMessage(msg) if msg.isInstanceOf[TracedRequest] =>
         // Check that the ForwarderActor has asked for a new connection
         verify(pool).getNewConnection(destination)
     }
