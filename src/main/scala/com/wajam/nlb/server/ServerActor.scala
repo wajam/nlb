@@ -15,8 +15,8 @@ import com.wajam.nlb.forwarder.ForwarderActor
 class ServerActor(
     pool: SprayConnectionPool,
     router: Router,
-    forwarderIdleTimeout: Duration)
-    (implicit tracer: Tracer)
+    forwarderIdleTimeout: Duration,
+    implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented {
@@ -39,9 +39,9 @@ class ServerActor(
       sender ! HttpResponse(entity = HttpEntity("Ok"))
 
     case request: HttpRequest =>
-      val client = sender
+      val forwarder = context.actorOf(ForwarderActor.props(pool, router, forwarderIdleTimeout))
 
-      context actorOf Props(ForwarderActor(pool, client, request, router, forwarderIdleTimeout))
+      forwarder forward request
 
       incomingRequestsMeter.mark()
   }
@@ -49,5 +49,9 @@ class ServerActor(
 
 object ServerActor {
 
-  def apply(pool: SprayConnectionPool, router: Router, forwarderIdleTimeout: Duration)(implicit tracer: Tracer) = new ServerActor(pool, router, forwarderIdleTimeout)
+  def props(
+      pool: SprayConnectionPool,
+      router: Router,
+      forwarderIdleTimeout: Duration)
+      (implicit tracer: Tracer) = Props(classOf[ServerActor], pool, router, forwarderIdleTimeout, tracer)
 }

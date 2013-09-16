@@ -27,8 +27,8 @@ object SprayUtils {
     case chunkEnd: ChunkedMessageEnd =>
       SprayUtils.withHeadersStripped(chunkEnd)
 
-    case (anything, request: TracedRequest) =>
-      (anything, request.copy(get = withHeadersStripped(request.get)))
+    case request: TracedRequest =>
+      request.copy(get = withHeadersStripped(request.get))
 
     case other =>
       other

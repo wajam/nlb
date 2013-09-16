@@ -11,17 +11,17 @@ import scala.concurrent.Await
 import scala.concurrent.duration._
 import akka.util.Timeout
 import akka.pattern.ask
-import org.slf4j.LoggerFactory
 import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.nrv.tracing.Tracer
+import com.wajam.nrv.Logging
 
 /**
  * Supervisor of all connection actors.
  * Actors are killed as soon as they throw an exception, since they only throw exceptions when their HTTP connection dies.
  * They are watched at all times, even when they are not in the pool (in that case, pool.remove would have no effect).
  */
-class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
+class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogging {
 
   // Stop the actor on any exception
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
@@ -47,11 +47,14 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor {
  *
  * @param maxSize the maximum amount of connections allowed in the pool
  */
-class SprayConnectionPool(connectionInitialTimeout: Duration,
-                          maxSize: Int,
-                          askTimeout: Long,
-                          implicit val system: ActorSystem)(implicit tracer: Tracer) extends Instrumented {
-  private val log = LoggerFactory.getLogger("nlb.connectionpool.logger")
+class SprayConnectionPool(
+    connectionInitialTimeout: Duration,
+    maxSize: Int,
+    askTimeout: Long)
+    (implicit system: ActorSystem,
+    tracer: Tracer)
+  extends Instrumented
+  with Logging {
 
   implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
@@ -115,7 +118,7 @@ class SprayConnectionPool(connectionInitialTimeout: Duration,
 
   // Get a new connection
   def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    val future = poolSupervisor ? Props(ClientActor(destination, connectionInitialTimeout, IO(Http)))
+    val future = poolSupervisor ? ClientActor.props(destination, connectionInitialTimeout, IO(Http))
     connectionPoolCreatesMeter.mark()
     Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
   }

@@ -59,12 +59,12 @@ object Nlb extends App with Logging {
                           config.getNodeHttpPort,
                           config.getLocalNodePort)
 
-  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getClientInitialTimeout, system)
+  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getClientInitialTimeout)
 
   val forwarderIdleTimeout = config.getForwarderIdleTimeout milliseconds
 
   // the handler actor replies to incoming HttpRequests
-  val handler = system.actorOf(Props(ServerActor(pool, router, forwarderIdleTimeout)), name = "ServerHandler")
+  val handler = system.actorOf(ServerActor.props(pool, router, forwarderIdleTimeout), name = "ServerHandler")
 
   log.info("Dynamically setting server hostname: " + hostname)
 
