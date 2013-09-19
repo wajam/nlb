@@ -2,7 +2,7 @@ package com.wajam.nlb.client
 
 import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.{ConcurrentLinkedQueue, ConcurrentHashMap}
+import java.util.concurrent.{ConcurrentLinkedDeque, ConcurrentHashMap}
 import java.net.InetSocketAddress
 import akka.io.IO
 import akka.actor._
@@ -58,7 +58,7 @@ class SprayConnectionPool(
 
   implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
-  private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedQueue[ActorRef]] asScala
+  private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedDeque[ActorRef]] asScala
   private val currentNbPooledConnections = new AtomicInteger(0)
 
   private val poolHitMeter = metrics.meter("connection-pool-hit", "hits")
@@ -80,13 +80,13 @@ class SprayConnectionPool(
     if (currentNbPooledConnections.incrementAndGet() <= maxSize) {
       val queue = connectionMap.get(destination) match {
         case None =>
-          val newQueue = new ConcurrentLinkedQueue[ActorRef]()
+          val newQueue = new ConcurrentLinkedDeque[ActorRef]()
           connectionMap.putIfAbsent(destination, newQueue)
           newQueue
         case Some(queue) =>
           queue
       }
-      val added = queue.add(connection)
+      val added = queue.offerFirst(connection)
       if(added) poolAddsMeter.mark()
       else currentNbPooledConnections.decrementAndGet()
       added
