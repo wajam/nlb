@@ -65,6 +65,7 @@ class SprayConnectionPool(
   private val poolMissMeter = metrics.meter("connection-pool-miss", "misses")
   private val poolAddsMeter = metrics.meter("connection-pool-adds", "additions")
   private val poolRemovesMeter = metrics.meter("connection-pool-removes", "removals")
+  private val poolRejectionsMeter = metrics.meter("connection-pool-rejections", "rejections")
   private val connectionPooledDestinationsGauge = metrics.gauge("connection-pooled-destinations-size") {
     connectionMap.size
   }
@@ -93,6 +94,7 @@ class SprayConnectionPool(
     }
     else {
       currentNbPooledConnections.decrementAndGet()
+      poolRejectionsMeter.mark()
       false
     }
   }
