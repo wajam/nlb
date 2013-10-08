@@ -10,7 +10,7 @@ import akka.actor._
 import scala.concurrent.duration._
 import akka.testkit.TestActorRef
 import akka.util.Timeout
-import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
+import com.wajam.tracing.{NullTraceRecorder, Tracer}
 
 class DummyActor extends Actor {
   def receive: Receive = {

@@ -4,9 +4,9 @@ import com.wajam.nrv.cluster.{Cluster, LocalNode, Node}
 import com.wajam.nrv.service.{ServiceMember, MemberStatus, Service, Resolver}
 import com.wajam.nrv.zookeeper.cluster.ZookeeperClusterManager
 import com.wajam.nrv.zookeeper.ZookeeperClient
-import com.wajam.nrv.Logging
+import com.wajam.commons.Logging
 import scala.util.Random
-import java.net.{InetSocketAddress}
+import java.net.InetSocketAddress
 import scala.annotation.tailrec
 import scala.util.matching.Regex
 import scala.util.matching.Regex.Match

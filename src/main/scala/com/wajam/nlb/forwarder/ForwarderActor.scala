@@ -4,7 +4,7 @@ import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Pr
 import scala.concurrent.duration.Duration
 import spray.http._
 import spray.http.HttpHeaders.Connection
-import com.wajam.nrv.tracing.{RpcName, Annotation, Tracer}
+import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
