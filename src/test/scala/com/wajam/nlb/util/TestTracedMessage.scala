@@ -7,7 +7,7 @@ import org.scalatest.matchers.ShouldMatchers._
 import spray.http.{HttpHeader, HttpRequest}
 import spray.http.HttpHeaders.RawHeader
 import com.wajam.nrv.service.TraceHeader
-import com.wajam.nrv.tracing.{ConsoleTraceRecorder, Tracer, TraceContext}
+import com.wajam.tracing.{ConsoleTraceRecorder, Tracer, TraceContext}
 import org.scalatest.mock.MockitoSugar
 
 @RunWith(classOf[JUnitRunner])

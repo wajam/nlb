@@ -1,7 +1,7 @@
 package com.wajam.nlb.util
 
 import spray.http.{HttpRequest, HttpHeader, HttpMessage}
-import com.wajam.nrv.tracing.{Tracer, TraceContext}
+import com.wajam.tracing.{Tracer, TraceContext}
 import scala.annotation.tailrec
 import com.wajam.nrv.service.TraceHeader
 import spray.http.HttpHeaders.RawHeader

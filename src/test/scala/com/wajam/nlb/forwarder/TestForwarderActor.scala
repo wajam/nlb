@@ -10,7 +10,7 @@ import com.wajam.nlb.test.ActorProxy
 import com.typesafe.config.ConfigFactory
 import com.wajam.nlb.client.SprayConnectionPool
 import akka.util.Timeout
-import com.wajam.nrv.tracing.{NullTraceRecorder, Tracer}
+import com.wajam.tracing.{NullTraceRecorder, Tracer}
 import java.net.InetSocketAddress
 import spray.http._
 import org.scalatest.mock.MockitoSugar

@@ -12,7 +12,7 @@ import akka.util.Timeout
 import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
-import com.wajam.nrv.tracing.{Tracer, NullTraceRecorder}
+import com.wajam.tracing.{Tracer, NullTraceRecorder}
 import com.wajam.nlb.util.{StartStopTimer, TracedRequest}
 import com.wajam.nlb.test.ActorProxy
 import org.scalatest.mock.MockitoSugar
