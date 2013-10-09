@@ -27,6 +27,8 @@ object NlbBuild extends Build {
   var commonDeps = Seq(
     "nl.grons" %% "metrics-scala" % "2.2.0",
     "com.yammer.metrics" % "metrics-graphite" % "2.2.0",
+    "com.wajam" %% "commons-core" % "0.1-SNAPSHOT",
+    "com.wajam" %% "commons-tracing" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT",
@@ -60,7 +62,8 @@ object NlbBuild extends Build {
     publishMavenStyle := true,
     organization := "com.wajam",
     version := "0.1-SNAPSHOT",
-    scalaVersion := "2.10.2"
+    scalaVersion := "2.10.2",
+    scalacOptions ++= Seq( "-deprecation", "-unchecked", "-feature" )
   )
 
   lazy val root = Project(PROJECT_NAME, file("."))

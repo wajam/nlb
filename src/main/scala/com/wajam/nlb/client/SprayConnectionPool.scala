@@ -13,8 +13,9 @@ import akka.util.Timeout
 import akka.pattern.ask
 import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
-import com.wajam.nrv.tracing.Tracer
-import com.wajam.nrv.Logging
+import com.wajam.tracing.Tracer
+import com.wajam.commons.Logging
+import scala.language.postfixOps
 
 /**
  * Supervisor of all connection actors.

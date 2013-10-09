@@ -1,21 +1,22 @@
 package com.wajam.nlb
 
-import akka.actor.{ActorSystem, Props}
+import akka.actor.ActorSystem
 import akka.io.IO
 import scala.concurrent.duration._
 import spray.can.Http
 import com.wajam.nlb.server.ServerActor
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.Router
-import com.wajam.nrv.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
+import com.wajam.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
 import com.wajam.nrv.scribe.ScribeTraceRecorder
-import com.wajam.nrv.Logging
+import com.wajam.commons.Logging
 import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
 import java.net.InetAddress
 import spray.can.server.ServerSettings
 import spray.http.HttpHeaders.Host
+import scala.language.postfixOps
 
 object Nlb extends App with Logging {
 

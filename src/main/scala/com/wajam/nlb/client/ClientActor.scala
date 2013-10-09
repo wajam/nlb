@@ -7,7 +7,7 @@ import spray.can.Http
 import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
-import com.wajam.nrv.tracing.{TraceContext, RpcName, Annotation, Tracer}
+import com.wajam.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Timing}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
