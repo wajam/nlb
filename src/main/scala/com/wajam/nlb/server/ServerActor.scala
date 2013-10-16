@@ -22,6 +22,7 @@ class ServerActor(
   with Instrumented {
 
   private val incomingRequestsMeter = metrics.meter("server-incoming-requests", "requests")
+  private val timeoutMeter = metrics.meter("server-request-timeouts", "timeouts")
 
   override val supervisorStrategy =
     OneForOneStrategy(loggingEnabled = false) {
@@ -44,6 +45,10 @@ class ServerActor(
       forwarder forward request
 
       incomingRequestsMeter.mark()
+
+    case Timedout =>
+      timeoutMeter.mark()
+      sender ! HttpResponse(status = 500, entity = HttpEntity("Request timed out: couldn't get response in time"))
   }
 }
 

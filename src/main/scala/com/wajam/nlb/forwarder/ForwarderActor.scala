@@ -1,25 +1,29 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
+import java.net.InetSocketAddress
 import scala.concurrent.duration.Duration
+import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
-import com.wajam.nlb.client.SprayConnectionPool
+import com.wajam.nlb.client.{ClientException, SprayConnectionPool}
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
-import java.net.InetSocketAddress
+
 
 class ForwarderActor(
     pool: SprayConnectionPool,
     router: Router,
-    idleTimeout: Duration,
+    timeout: Duration,
     implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
   with Timing {
 
   private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
+
+  // This timeout ensures
+  context.setReceiveTimeout(timeout)
 
   def receive = {
     case request: HttpRequest =>
@@ -42,9 +46,6 @@ class ForwarderActor(
         tracer.record(Annotation.ServerAddress(tracedRequest.address))
       }
 
-      // Set an initial timeout
-      setTimeout()
-
       context.watch(clientConnection)
 
       log.debug("Routing to node {} using connection {}", destination, clientConnection)
@@ -54,109 +55,106 @@ class ForwarderActor(
       context.become(
         waitForResponse(client, destination, tracedRequest, clientConnection)
       )
-
-    case ReceiveTimeout =>
-      log.warning("Forwarder initial timeout")
-      context.stop(self)
   }
 
   def waitForResponse(client: ActorRef,
                       destination: InetSocketAddress,
                       tracedRequest: TracedRequest,
-                      clientConnection: ActorRef): Receive = sanitizeHeaders andThen {
-    case Terminated(_) =>
-      /* When the connection from the pool dies (possible race),
-         and we haven't transmitted anything yet,
-         we fallback on a brand new connection */
-      val fallbackClientConnection = pool.getNewConnection(destination)
-      fallbackClientConnection ! tracedRequest
+                      clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
+    sanitizeHeaders andThen {
+      case Terminated(_) =>
+        /* When the connection from the pool dies (possible race),
+           and we haven't transmitted anything yet,
+           we fallback on a brand new connection */
+        val fallbackClientConnection = pool.getNewConnection(destination)
+        fallbackClientConnection ! tracedRequest
 
-      connectionFallbacksMeter.mark()
+        connectionFallbacksMeter.mark()
 
-      context.become(
-        waitForResponse(client, destination, tracedRequest, fallbackClientConnection)
-      )
+        context.become(
+          waitForResponse(client, destination, tracedRequest, fallbackClientConnection)
+        )
 
-    case response: HttpResponse =>
-      client ! response
+      case response: HttpResponse =>
+        client ! response
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
-      }
-      tracedRequest.timer.stop()
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
+        }
+        tracedRequest.timer.stop()
 
-      if(!response.connectionCloseExpected) {
-        log.debug("Pooling connection")
-        pool.poolConnection(destination, clientConnection)
-      }
-      context.stop(self)
+        if(!response.connectionCloseExpected) {
+          log.debug("Pooling connection")
+          pool.poolConnection(destination, clientConnection)
+        }
+        context.stop(self)
 
-    case responseStart: ChunkedResponseStart =>
-      // Renew the idle timeout
-      setTimeout()
+      case responseStart: ChunkedResponseStart =>
+        log.debug("Forwarder received ChunkedResponseStart")
 
-      log.debug("Forwarder received ChunkedResponseStart")
+        client ! responseStart
 
-      client ! responseStart
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.Message("First chunk sent"))
+        }
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.Message("First chunk sent"))
-      }
-
-      context.unwatch(clientConnection)
-      context.become(
-        streamResponse(client, destination, tracedRequest, clientConnection)
-      )
+        context.unwatch(clientConnection)
+        context.become(
+          streamResponse(client, destination, tracedRequest, clientConnection)
+        )
+    }
   }
 
   def streamResponse(client: ActorRef,
                      destination: InetSocketAddress,
                      tracedRequest: TracedRequest,
-                     clientConnection: ActorRef): Receive = sanitizeHeaders andThen {
+                     clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
+    sanitizeHeaders andThen {
+      case chunkEnd: ChunkedMessageEnd =>
+        client ! chunkEnd
 
-    case chunkEnd: ChunkedMessageEnd =>
-      client ! chunkEnd
+        log.debug("Forwarder received ChunkedMessageEnd")
 
-      log.debug("Forwarder received ChunkedMessageEnd")
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.ServerSend(None))
+        }
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.ServerSend(None))
-      }
+        if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose => true; case _ => false }) {
+          log.debug("Pooling connection")
+          pool.poolConnection(destination, clientConnection)
+        }
+        tracedRequest.timer.stop()
+        context.stop(self)
 
-      if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose => true; case _ => false }) {
-        log.debug("Pooling connection")
-        pool.poolConnection(destination, clientConnection)
-      }
-      tracedRequest.timer.stop()
-      context.stop(self)
+      case responseStart: ChunkedResponseStart =>
+        log.debug("Forwarder received ChunkedResponseStart")
 
-    case responseStart: ChunkedResponseStart =>
-      // Renew the idle timeout
-      setTimeout()
+        client ! responseStart
 
-      log.debug("Forwarder received ChunkedResponseStart")
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.Message("First chunk sent"))
+        }
 
-      client ! responseStart
+      case chunk: MessageChunk =>
+        log.debug("Forwarder received MessageChunk")
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.Message("First chunk sent"))
-      }
+        client ! chunk
 
-    case chunk: MessageChunk =>
-      // Renew the idle timeout
-      setTimeout()
+      case ReceiveTimeout =>
+        log.debug("Forwarder idle timeout")
+        context.stop(self)
+    }
+  }
 
-      log.debug("Forwarder received MessageChunk")
-
-      client ! chunk
-
+  def handleTimeout: Receive = {
     case ReceiveTimeout =>
-      log.debug("Forwarder idle timeout")
+      log.warning("Forwarder timeout")
       context.stop(self)
   }
 
-  def setTimeout() = {
-    context.setReceiveTimeout(idleTimeout)
+  def handleClientErrors(client: ActorRef): Receive = {
+    case e: ClientException =>
+      client ! HttpResponse(status = 500, entity = HttpEntity("HTTP client error: " + e.getMessage))
   }
 }
 
@@ -165,6 +163,6 @@ object ForwarderActor {
   def props(
       pool: SprayConnectionPool,
       router: Router,
-      idleTimeout: Duration)
-      (implicit tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, idleTimeout, tracer)
+      timeout: Duration)
+      (implicit tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, timeout, tracer)
 }

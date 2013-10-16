@@ -2,9 +2,9 @@ package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
 import akka.actor._
-import scala.concurrent.duration._
 import spray.can.Http
-import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
+import spray.http._
+import StatusCodes.{Success, ServerError, ClientError}
 import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.{TraceContext, RpcName, Annotation, Tracer}
@@ -19,7 +19,6 @@ import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
  */
 class ClientActor(
     destination: InetSocketAddress,
-    initialTimeout: Duration,
     IOconnector: ActorRef,
     implicit val tracer: Tracer)
   extends Actor
@@ -29,26 +28,27 @@ class ClientActor(
 
   import context.system
 
-  private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
-  private val connectionFailedMeter = metrics.meter("client-connection-failed", "fails")
-  private val sendFailedMeter = metrics.meter("client-send-failed", "fails")
-  private val requestTimeoutMeter = metrics.meter("client-request-timeout", "fails")
-  private val connectionExpiredMeter = metrics.meter("client-connection-expired", "expirations")
-  private val connectionClosedMeter = metrics.meter("client-connection-closed", "closings")
-  private val openConnectionsCounter = metrics.counter("client-open-connections", "connections")
-  private val chunkedResponsesMeter = metrics.meter("client-chunk-responses", "responses")
-  private val unchunkedResponsesMeter = metrics.meter("client-unchunk-responses", "responses")
-  private val totalChunksMeter = metrics.meter("client-total-chunks-transferred", "chunks")
+  private val connectionFailedMeter =  metrics.meter("error-connection-failed", "fails")
+  private val sendFailedMeter =        metrics.meter("error-send-failed", "fails")
+  private val requestTimeoutMeter =    metrics.meter("error-request-timeout", "fails")
+  private val connectionExpiredMeter = metrics.meter("error-connection-expired", "expirations")
+  private val connectionClosedMeter =  metrics.meter("error-connection-closed", "closings")
 
-  private val clusterReplyTimer = timer("cluster-reply-time")
+  private val openConnectionsCounter =  metrics.counter("open-connections", "connections")
+  private val chunkedResponsesMeter =   metrics.meter("chunk-responses", "responses")
+  private val unchunkedResponsesMeter = metrics.meter("unchunk-responses", "responses")
+  private val totalChunksMeter =        metrics.meter("total-chunks-transferred", "chunks")
+
+  private val http2xxMeter = metrics.meter("http-responses-2xx", "responses")
+  private val http4xxMeter = metrics.meter("http-responses-4xx", "responses")
+  private val http5xxMeter = metrics.meter("http-responses-5xx", "responses")
+
+  private val clusterReplyTimer =  timer("cluster-reply-time")
   private val chunkTransferTimer = timer("chunk-transfer-time")
 
   var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
   var request: TracedRequest = _
-
-  // Initial timeout
-  context.setReceiveTimeout(initialTimeout)
   
   /**
    * Behaviours
@@ -56,9 +56,6 @@ class ClientActor(
 
   def receive = {
     case request: TracedRequest =>
-      // Clear timeout
-      context.setReceiveTimeout(Duration.Undefined)
-
       // start by establishing a new HTTP connection
       this.forwarder = Some(sender)
       this.request = request
@@ -66,11 +63,6 @@ class ClientActor(
       context.become(connect)
 
       IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
-
-    case ReceiveTimeout =>
-      log.debug("Initial timeout")
-      initialTimeoutsMeter.mark()
-      throw new InitialTimeoutException
   }
 
   def connect: Receive = {
@@ -84,10 +76,10 @@ class ClientActor(
       // watch the Spray connector to monitor connection lifecycle
       context.watch(server)
 
-    case ev: Http.CommandFailed =>
-      log.warning("Command failed ({})", ev)
+    case _: Http.CommandFailed =>
       connectionFailedMeter.mark()
-      throw new CommandFailedException(ev)
+
+      dispatchError(new CommandFailedException)
   }
 
   def waitForRequest: Receive = handleErrors orElse {
@@ -144,15 +136,10 @@ class ClientActor(
       log.debug("Received {} response with {} bytes", status, entity.buffer.length)
 
     // Specific errors
-    case ev: Http.SendFailed =>
-      log.warning("Send failed ({})", ev)
+    case _: Http.SendFailed =>
       sendFailedMeter.mark()
-      throw new SendFailedException(ev)
 
-    case ev: Timedout =>
-      log.warning("Received Timedout ({})", ev)
-      requestTimeoutMeter.mark()
-      throw new RequestTimeoutException
+      dispatchError(new SendFailedException)
   }
 
   def streamResponse(subContext: Option[TraceContext], statusCode: Int): Receive = handleErrors orElse {
@@ -180,28 +167,55 @@ class ClientActor(
   // Connection failures that can arise anytime (except in initial and connect modes)
   def handleErrors: Receive = {
     case Terminated(actor) if actor == server =>
-      log.debug("Connection expired ({})")
       connectionExpiredMeter.mark()
-      throw new ConnectionExpiredException
 
-    case ev: Http.ConnectionClosed =>
-      log.debug("Connection closed by server ({})", ev)
+      dispatchError(new ConnectionExpiredException)
+
+    case Timedout(_) =>
+      requestTimeoutMeter.mark()
+
+      dispatchError(new RequestTimeoutException)
+
+    case c: Http.ConnectionClosed =>
       connectionClosedMeter.mark()
 
-      forward(ev)
-
-      throw new ConnectionClosedException(ev)
+      dispatchError(new ConnectionClosedException)
   }
 
-  def becomeAvailable() = {
+  def becomeAvailable(): Unit = {
     forwarder = None
     context.become(waitForRequest)
   }
 
-  def forward(msg: Any) = {
+  def forward(msg: Any): Unit = {
     forwarder.map { forwarder =>
       forwarder ! msg
+
+      def extractStatus(msg: Any) = msg match {
+        case responseStart: ChunkedResponseStart =>
+          Some(responseStart.message.status)
+        case response: HttpResponse =>
+          Some(response.status)
+        case _ =>
+          None
+      }
+
+      for(status <- extractStatus(msg)) status match {
+        case Success(_) =>
+          http2xxMeter.mark()
+        case ClientError(_) =>
+          http4xxMeter.mark()
+        case ServerError(_) =>
+          http5xxMeter.mark()
+        case _ =>
+      }
     }
+  }
+
+  def dispatchError(e: Exception): Unit = {
+    log.debug(e.getMessage)
+    forward(e)
+    throw e
   }
 
   override def postStop(): Unit = {
@@ -212,27 +226,23 @@ class ClientActor(
 object ClientActor {
   def props(
       destination: InetSocketAddress,
-      initialTimeout: Duration,
       IOconnector: ActorRef)
-      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, initialTimeout, IOconnector, tracer)
+      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, IOconnector, tracer)
 }
 
 /**
  * Errors
  */
 
-class InitialTimeoutException extends Exception {
-  override def toString = "InitialTimeoutException"
-}
+abstract class ClientException(message: String) extends Exception(message)
 
-// Thrown whenever the connection is closed by the server, intentionally or not
-class ConnectionClosedException(command: Http.Event) extends Exception(command.toString)
+class ConnectionClosedException extends ClientException("Connection closed")
 
 // Thrown whenever the connection is closed by the Spray connector (usually when timing out)
-class ConnectionExpiredException extends Exception
+class ConnectionExpiredException extends ClientException("Connection expired")
 
-class CommandFailedException(event: Http.Event) extends Exception(event.toString)
+class CommandFailedException extends ClientException("Could not connect to server")
 
-class SendFailedException(event: Http.Event) extends Exception(event.toString)
+class SendFailedException extends ClientException("Could not write on connection")
 
-class RequestTimeoutException extends Exception
+class RequestTimeoutException extends ClientException("Request timed out")

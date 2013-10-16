@@ -95,7 +95,7 @@ class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
     pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
     poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
     IOconnector = TestActorRef(Props(new DummyActor()))
-    connectionRef = TestActorRef(ClientActor.props(destination, connectionInitialTimeout milliseconds, IOconnector), poolSupervisorRef, "connection-mock-actor")
+    connectionRef = TestActorRef(ClientActor.props(destination, IOconnector), poolSupervisorRef, "connection-mock-actor")
     poolSupervisorRef.watch(connectionRef)
     pool.poolConnection(destination, connectionRef)
   }

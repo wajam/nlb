@@ -70,7 +70,7 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     connectorRef = TestActorRef(new ConnectorProxyActor, "connector" + testId)
     connector = connectorRef.underlyingActor
 
-    clientRef = TestActorRef(ClientActor.props(destination, clientInitialTimeout, connectorRef), "client" + testId)
+    clientRef = TestActorRef(ClientActor.props(destination, connectorRef), "client" + testId)
     client = clientRef.underlyingActor
 
     routerRef = TestActorRef(new RouterProxyActor, "router" + testId)
@@ -162,9 +162,5 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
     expectMsgPF() {
       case RouterMessage(msg) if msg.isInstanceOf[ChunkedMessageEnd] =>
     }
-  }
-
-  test("should throw an InitialTimeoutException when creating an actor without feeding him with a request") {
-    EventFilter[InitialTimeoutException](occurrences = 1) intercept {}
   }
 }
