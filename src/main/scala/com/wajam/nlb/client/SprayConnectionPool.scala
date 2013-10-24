@@ -34,26 +34,34 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 
   def receive = {
     case p: Props =>
-      val child = context.actorOf(p)
+      // This is not the actual ForwarderActor ref, just a temporary ask actor.
+      // Do not send anything else than the ClientActor ref.
+      val forwarder = sender
+      val client = context.actorOf(p)
+
       // Store the Forwarder associated with this connection
-      forwarderLookup += (child -> sender)
+      forwarderLookup += (client -> forwarder)
       // Watch the connection
-      context.watch(child)
+      context.watch(client)
 
     case Connected =>
-      forwarderLookup.get(sender) match {
+      val client = sender
+
+      forwarderLookup.get(client) match {
         case Some(forwarder) =>
-          forwarder ! Some(sender)
-          forwarderLookup - sender
+          forwarder ! Some(client)
+          forwarderLookup - client
         case None =>
           log.warning("Received a Connect message with no associated Forwarder")
       }
 
     case ConnectionFailed =>
-      forwarderLookup.get(sender) match {
+      val client = sender
+
+      forwarderLookup.get(client) match {
         case Some(forwarder) =>
           forwarder ! None
-          forwarderLookup - sender
+          forwarderLookup - client
         case None =>
           log.warning("Received a ConnectionFailed message with no associated Forwarder")
       }

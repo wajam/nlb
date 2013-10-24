@@ -33,7 +33,7 @@ class ForwarderActor(
 
       val connection = pool.getConnection(destination)
 
-      usingConnection(connection, client) { connection =>
+      withConnection(connection, client) { connection =>
         val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
 
         tracer.trace(tracedRequest.context) {
@@ -70,7 +70,7 @@ class ForwarderActor(
          we fallback on a brand new connection */
       val fallbackClientConnection = pool.getNewConnection(destination)
 
-      usingConnection(fallbackClientConnection, client) { connection =>
+      withConnection(fallbackClientConnection, client) { connection =>
         connection ! tracedRequest
 
         connectionFallbacksMeter.mark()
@@ -162,7 +162,7 @@ class ForwarderActor(
     context.setReceiveTimeout(idleTimeout)
   }
 
-  def usingConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
+  def withConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
     connection match {
       case Some(connection) =>
         block(connection)
