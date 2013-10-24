@@ -1,6 +1,7 @@
 package com.wajam.nlb.forwarder
 
 import java.net.InetSocketAddress
+import scala.language.postfixOps
 import scala.concurrent.duration._
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}

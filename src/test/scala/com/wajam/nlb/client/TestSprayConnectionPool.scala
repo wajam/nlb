@@ -1,6 +1,7 @@
 package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
+import scala.language.postfixOps
 import scala.concurrent.duration._
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, BeforeAndAfter}
@@ -29,7 +30,7 @@ class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoS
   val connectionInitialTimeout = 1000
 
   trait Builder {
-    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
+    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 1 second)
 
     val dummyConnectionRef = TestActorRef(new DummyActor)
     val dummyConnectionActor = dummyConnectionRef.underlyingActor
@@ -93,7 +94,7 @@ class TestPoolSupervisor(_system: ActorSystem)
       supervisor ! ClientActor.ConnectionFailed
     }
 
-    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
+    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 1 second)
     val supervisor = TestActorRef(Props(new PoolSupervisor(pool)))
   }
 
