@@ -1,30 +1,34 @@
 package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
+import scala.concurrent.duration._
+import scala.util.Random
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
+import org.scalatest.{FlatSpec, BeforeAndAfterAll, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
+import org.scalatest.mock.MockitoSugar
 import com.typesafe.config.ConfigFactory
 import akka.actor._
-import scala.concurrent.duration._
-import scala.concurrent.duration.Duration
 import akka.util.Timeout
-import akka.testkit.{TestActorRef, TestKit, ImplicitSender, EventFilter}
+import akka.testkit._
+import akka.io.Tcp.Event
 import spray.can.Http
 import spray.http.{HttpRequest, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import com.wajam.tracing.{Tracer, NullTraceRecorder}
 import com.wajam.nlb.util.{StartStopTimer, TracedRequest}
-import com.wajam.nlb.test.ActorProxy
-import org.scalatest.mock.MockitoSugar
+import ClientActor._
 
 @RunWith(classOf[JUnitRunner])
-class TestClientActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
+class TestClientActor(_system: ActorSystem)
+  extends TestKit(_system)
+  with FlatSpec
+  with BeforeAndAfter
+  with BeforeAndAfterAll
+  with MockitoSugar {
 
   implicit val askTimeout = Timeout(5 seconds)
 
   implicit val tracer = new Tracer(NullTraceRecorder)
-
-  val clientInitialTimeout: Duration = 1 second
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
 
@@ -37,134 +41,98 @@ class TestClientActor(_system: ActorSystem) extends TestKit(_system) with Implic
 
   var testId = 0
 
-  var connectorRef: TestActorRef[Actor] = _
-  var connector: Actor = _
+  def this() = this(ActorSystem("TestActorSystem", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
 
-  var clientRef: TestActorRef[ClientActor] = _
-  var client: ClientActor = _
+  trait Builder {
+    class ForwarderProbe extends TestProbe(system) {
+      def sendRequest() = send(client, TRACED_REQUEST)
+    }
 
-  var routerRef: TestActorRef[Actor] = _
-  var router: Actor = _
+    class ServerProbe extends TestProbe(system) {
 
-  var serverRef: TestActorRef[Actor] = _
-  var server: Actor = _
+      def sendConnectAck(ack: Event = Http.Connected(destination, destination)) = {
+        send(client, ack)
+      }
 
-  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
+      def replyWithChunkedSequence() = {
+        val chunkStart = new ChunkedResponseStart(HTTP_RESPONSE)
+        val messageChunk = new MessageChunk(Array[Byte](1, 0), "")
+        val chunkEnd = ChunkedMessageEnd()
 
-  class RouterProxyActor extends ProxyActor {
-    def wrap(msg: Any) = RouterMessage(msg)
-  }
-  case class RouterMessage(msg: Any)
+        send(client, chunkStart)
+        send(client, messageChunk)
+        send(client, chunkEnd)
+      }
+    }
 
-  class ServerProxyActor extends ProxyActor {
-    def wrap(msg: Any) = ServerMessage(msg)
-  }
-  case class ServerMessage(msg: Any)
+    def replyToConnect(reply: Event = Http.Connected(destination, destination)) = {
+      connector.expectMsgClass(classOf[Http.Connect])
+      server.sendConnectAck(reply)
+    }
 
-  class ConnectorProxyActor extends ProxyActor {
-    def wrap(msg: Any) = ConnectorMessage(msg)
-  }
-  case class ConnectorMessage(msg: Any)
+    def onceConnected(block: => Unit) = {
+      replyToConnect()
+      expectMsg(Connected)
+      block
+    }
 
-  before {
-    connectorRef = TestActorRef(new ConnectorProxyActor, "connector" + testId)
-    connector = connectorRef.underlyingActor
+    val connector = TestProbe()
 
-    clientRef = TestActorRef(ClientActor.props(destination, clientInitialTimeout, connectorRef), "client" + testId)
-    client = clientRef.underlyingActor
+    val forwarder = new ForwarderProbe
+    val server = new ServerProbe
 
-    routerRef = TestActorRef(new RouterProxyActor, "router" + testId)
-    router = routerRef.underlyingActor
-
-    serverRef = TestActorRef(new ServerProxyActor, "server" + testId)
-    server = serverRef.underlyingActor
-  }
-
-  after {
-    testId = testId + 1
-
-    _system.stop(connectorRef)
-    _system.stop(clientRef)
-    _system.stop(routerRef)
-    _system.stop(serverRef)
+    val client = TestActorRef(ClientActor.props(destination, connector.ref), testActor, Random.nextString(1))
   }
 
   override def afterAll {
-    _system.shutdown()
-    _system.awaitTermination()
+    TestKit.shutdownActorSystem(system)
   }
 
-  test("should connect to the server") {
-    routerRef ! TellTo(clientRef, TRACED_REQUEST)
+  "a ClientActor" should "send a Http.Connect to the server" in new Builder {
+    connector.expectMsgClass(classOf[Http.Connect])
+  }
 
-    expectMsgPF() {
-      case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] =>
+  it should "notify its parent when connected" in new Builder {
+    replyToConnect()
+
+    expectMsg(Connected)
+  }
+
+  it should "notify its parent when connection failed" in new Builder {
+    replyToConnect(Http.CommandFailed(Http.Connect(destination.getHostName)))
+
+    expectMsg(ConnectionFailed)
+  }
+
+  it should "send the appropriate request to the server" in new Builder {
+    onceConnected {
+      forwarder.sendRequest()
+      server.expectMsgClass(classOf[HttpRequest])
     }
   }
 
-  test("should send the appropriate request to the server") {
-    routerRef ! TellTo(clientRef, TRACED_REQUEST)
+  it should "forward the response to the router when receiving an HttpResponse from the server" in new Builder {
+    onceConnected {
+      forwarder.sendRequest()
 
-    expectMsgPF() {
-      // Send connection confirmation
-      case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] =>
-        serverRef ! TellTo(clientRef, Http.Connected(destination, destination))
-    }
-    expectMsgPF() {
-      // Check that request is sent
-      case ServerMessage(msg) if msg.isInstanceOf[HttpRequest] =>
+      server.expectMsgClass(classOf[HttpRequest])
+      server.reply(HTTP_RESPONSE)
+
+      forwarder.expectMsgClass(classOf[HttpResponse])
     }
   }
 
-  test("should forward the response to the router when receiving an HttpResponse from the server") {
-    routerRef ! TellTo(clientRef, TRACED_REQUEST)
+  it should "forward the response to the router when receiving ChunkedResponseStart, MessageChunk then ChunkedMessageEnd from the server" in new Builder {
+    onceConnected {
+      forwarder.sendRequest()
 
-    expectMsgPF() {
-      // Send connection ACK
-      case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] => serverRef ! TellTo(clientRef, HTTP_CONNECTED)
-    }
-    expectMsgPF() {
-      // Reply to the request
-      case ServerMessage(msg) if msg.isInstanceOf[HttpRequest] => serverRef ! TellTo(clientRef, HTTP_RESPONSE)
-    }
-    expectMsgPF() {
+      server.expectMsgClass(classOf[HttpRequest])
+      server.replyWithChunkedSequence()
+
       // Check that the response is forwarded
-      case RouterMessage(msg) if msg.isInstanceOf[HttpResponse] =>
+      forwarder.expectMsgClass(classOf[ChunkedResponseStart])
+      forwarder.expectMsgClass(classOf[MessageChunk])
+      forwarder.expectMsgClass(classOf[ChunkedMessageEnd])
     }
-  }
-
-  test("should forward the response to the router when receiving ChunkedResponseStart, MessageChunk then ChunkedMessageEnd from the server") {
-    val chunkStart = new ChunkedResponseStart(HTTP_RESPONSE)
-    val messageChunk = new MessageChunk(Array[Byte](1, 0), "")
-    val chunkEnd = ChunkedMessageEnd()
-
-    routerRef ! TellTo(clientRef, TRACED_REQUEST)
-
-    expectMsgPF() {
-      // Send connection ACK
-      case ConnectorMessage(msg) if msg.isInstanceOf[Http.Connect] => serverRef ! TellTo(clientRef, HTTP_CONNECTED)
-    }
-    expectMsgPF() {
-      // Reply to the request
-      case ServerMessage(msg) if msg.isInstanceOf[HttpRequest] => {
-        serverRef ! TellTo(clientRef, chunkStart)
-        serverRef ! TellTo(clientRef, messageChunk)
-        serverRef ! TellTo(clientRef, chunkEnd)
-      }
-    }
-    // Check that the response is forwarded
-    expectMsgPF() {
-      case RouterMessage(msg) if msg.isInstanceOf[ChunkedResponseStart] =>
-    }
-    expectMsgPF() {
-      case RouterMessage(msg) if msg.isInstanceOf[MessageChunk] =>
-    }
-    expectMsgPF() {
-      case RouterMessage(msg) if msg.isInstanceOf[ChunkedMessageEnd] =>
-    }
-  }
-
-  test("should throw an InitialTimeoutException when creating an actor without feeding him with a request") {
-    EventFilter[InitialTimeoutException](occurrences = 1) intercept {}
   }
 }

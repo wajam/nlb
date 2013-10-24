@@ -24,10 +24,6 @@ class NlbConfiguration(config: Config) {
     config.getInt("nlb.resolving.localnode-port")
   }
 
-  def getAskTimeout: Long = {
-    config.getMilliseconds("nlb.ask-timeout")
-  }
-
   def getKnownPaths: List[String] = {
     config.getStringList("nlb.known-paths").toList
   }
@@ -46,6 +42,10 @@ class NlbConfiguration(config: Config) {
 
   def getConnectionPoolMaxSize: Int = {
     config.getInt("nlb.connection-pool.max-size")
+  }
+
+  def getConnectionPoolAskTimeout: Long = {
+    config.getMilliseconds("nlb.connection-pool.ask-timeout")
   }
 
   def getGraphiteServerAddress: String = {

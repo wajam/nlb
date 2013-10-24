@@ -60,7 +60,7 @@ object Nlb extends App with Logging {
                           config.getNodeHttpPort,
                           config.getLocalNodePort)
 
-  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getClientInitialTimeout)
+  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getConnectionPoolAskTimeout milliseconds)
 
   val forwarderIdleTimeout = config.getForwarderIdleTimeout milliseconds
 
