@@ -1,24 +1,22 @@
 package com.wajam.nlb.forwarder
 
+import java.net.InetSocketAddress
+import scala.concurrent.duration._
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
-import akka.actor.{Props, ActorRef, ActorSystem}
-import scala.concurrent.duration._
-import akka.testkit.{TestActorRef, ImplicitSender, TestKit}
-import com.wajam.nlb.test.ActorProxy
-import com.typesafe.config.ConfigFactory
-import com.wajam.nlb.client.SprayConnectionPool
-import akka.util.Timeout
-import com.wajam.tracing.{NullTraceRecorder, Tracer}
-import java.net.InetSocketAddress
-import spray.http._
 import org.scalatest.mock.MockitoSugar
 import org.mockito.Mockito._
-import HttpMethods.GET
+import com.typesafe.config.ConfigFactory
+import akka.actor.{Props, ActorSystem}
+import akka.testkit.{TestActorRef, ImplicitSender, TestKit}
+import akka.util.Timeout
+import spray.http.HttpMethods.GET
+import spray.http._
+import com.wajam.nlb.test.ActorProxy
+import com.wajam.nlb.client.SprayConnectionPool
+import com.wajam.tracing.{NullTraceRecorder, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Router}
-import spray.http.HttpRequest
-import spray.http.HttpResponse
 
 @RunWith(classOf[JUnitRunner])
 class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
@@ -62,8 +60,8 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
     clientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
     newClientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
 
-    when(pool.getNewConnection(destination)).thenReturn(newClientActorRef)
-    when(pool.getConnection(destination)).thenReturn(clientActorRef)
+    when(pool.getNewConnection(destination)).thenReturn(Some(newClientActorRef))
+    when(pool.getConnection(destination)).thenReturn(Some(clientActorRef))
 
     forwarderRef = TestActorRef(Props(new ForwarderActor(pool, router, idleTimeout, tracer)))
 

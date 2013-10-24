@@ -1,14 +1,14 @@
 package com.wajam.nlb.forwarder
 
-import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
+import java.net.InetSocketAddress
 import scala.concurrent.duration.Duration
+import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
-import java.net.InetSocketAddress
 
 class ForwarderActor(
     pool: SprayConnectionPool,
@@ -31,29 +31,29 @@ class ForwarderActor(
 
       val destination = router.resolve(request.uri.path.toString)
 
-      // clientActor is the actor handling the connection with the server
-      // Not to be mistaken with client, which is *our* client
-      val clientConnection = pool.getConnection(destination)
+      val connection = pool.getConnection(destination)
 
-      val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
+      usingConnection(connection, client) { connection =>
+        val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
-        tracer.record(Annotation.ServerAddress(tracedRequest.address))
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
+          tracer.record(Annotation.ServerAddress(tracedRequest.address))
+        }
+
+        // Set an initial timeout
+        setTimeout()
+
+        context.watch(connection)
+
+        log.debug("Routing to node {} using connection {}", destination, connection)
+
+        connection ! tracedRequest
+
+        context.become(
+          waitForResponse(client, destination, tracedRequest, connection)
+        )
       }
-
-      // Set an initial timeout
-      setTimeout()
-
-      context.watch(clientConnection)
-
-      log.debug("Routing to node {} using connection {}", destination, clientConnection)
-
-      clientConnection ! tracedRequest
-
-      context.become(
-        waitForResponse(client, destination, tracedRequest, clientConnection)
-      )
 
     case ReceiveTimeout =>
       log.warning("Forwarder initial timeout")
@@ -69,13 +69,16 @@ class ForwarderActor(
          and we haven't transmitted anything yet,
          we fallback on a brand new connection */
       val fallbackClientConnection = pool.getNewConnection(destination)
-      fallbackClientConnection ! tracedRequest
 
-      connectionFallbacksMeter.mark()
+      usingConnection(fallbackClientConnection, client) { connection =>
+        connection ! tracedRequest
 
-      context.become(
-        waitForResponse(client, destination, tracedRequest, fallbackClientConnection)
-      )
+        connectionFallbacksMeter.mark()
+
+        context.become(
+          waitForResponse(client, destination, tracedRequest, connection)
+        )
+      }
 
     case response: HttpResponse =>
       client ! response
@@ -157,6 +160,15 @@ class ForwarderActor(
 
   def setTimeout() = {
     context.setReceiveTimeout(idleTimeout)
+  }
+
+  def usingConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
+    connection match {
+      case Some(connection) =>
+        block(connection)
+      case None =>
+        client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination"))
+    }
   }
 }
 

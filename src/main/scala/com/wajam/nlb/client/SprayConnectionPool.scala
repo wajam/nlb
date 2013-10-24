@@ -15,6 +15,7 @@ import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.Tracer
 import com.wajam.commons.Logging
+import com.wajam.nlb.client.ClientActor.{Connected, ConnectionFailed}
 import scala.language.postfixOps
 
 /**
@@ -23,6 +24,7 @@ import scala.language.postfixOps
  * They are watched at all times, even when they are not in the pool (in that case, pool.remove would have no effect).
  */
 class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogging {
+  val forwarderLookup = new collection.mutable.HashMap[ActorRef, ActorRef]()
 
   // Stop the actor on any exception
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
@@ -33,10 +35,29 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
   def receive = {
     case p: Props =>
       val child = context.actorOf(p)
-      // Return a new actor
-      sender ! child
-      // Watch it
+      // Store the Forwarder associated with this connection
+      forwarderLookup += (child -> sender)
+      // Watch the connection
       context.watch(child)
+
+    case Connected =>
+      forwarderLookup.get(sender) match {
+        case Some(forwarder) =>
+          forwarder ! Some(sender)
+          forwarderLookup - sender
+        case None =>
+          log.warning("Received a Connect message with no associated Forwarder")
+      }
+
+    case ConnectionFailed =>
+      forwarderLookup.get(sender) match {
+        case Some(forwarder) =>
+          forwarder ! None
+          forwarderLookup - sender
+        case None =>
+          log.warning("Received a ConnectionFailed message with no associated Forwarder")
+      }
+
     case Terminated(child) =>
       // Remove the actor when he's dead
       pool.remove(child)
@@ -120,16 +141,16 @@ class SprayConnectionPool(
   }
 
   // Get a new connection
-  def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    val future = poolSupervisor ? ClientActor.props(destination, connectionInitialTimeout, IO(Http))
+  def getNewConnection(destination: InetSocketAddress): Option[ActorRef] = {
+    val future = poolSupervisor ? ClientActor.props(destination, IO(Http))
     connectionPoolCreatesMeter.mark()
-    Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
+    Await.result(future, askTimeout milliseconds).asInstanceOf[Option[ActorRef]]
   }
 
   // Get a pooled connection if available, otherwise get a new one
-  def getConnection(destination: InetSocketAddress): ActorRef = {
+  def getConnection(destination: InetSocketAddress): Option[ActorRef] = {
     getPooledConnection(destination: InetSocketAddress) match {
-      case Some(pooledConnection) =>
+      case pooledConnection @ Some(_) =>
         log.debug("Using a pooled connection")
         pooledConnection
       case None => {

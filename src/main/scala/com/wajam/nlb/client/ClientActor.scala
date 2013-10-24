@@ -2,7 +2,6 @@ package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
 import akka.actor._
-import scala.concurrent.duration._
 import spray.can.Http
 import spray.http.{Timedout, HttpResponse, ChunkedResponseStart, MessageChunk, ChunkedMessageEnd}
 import spray.can.client.ClientConnectionSettings
@@ -10,6 +9,7 @@ import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Timing}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
+import ClientActor._
 
 /**
  * Actor handling an HTTP connection with a specific node.
@@ -19,7 +19,6 @@ import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
  */
 class ClientActor(
     destination: InetSocketAddress,
-    initialTimeout: Duration,
     IOconnector: ActorRef,
     implicit val tracer: Tracer)
   extends Actor
@@ -29,7 +28,6 @@ class ClientActor(
 
   import context.system
 
-  private val initialTimeoutsMeter = metrics.meter("client-initial-timeouts", "timeouts")
   private val connectionFailedMeter = metrics.meter("client-connection-failed", "fails")
   private val sendFailedMeter = metrics.meter("client-send-failed", "fails")
   private val requestTimeoutMeter = metrics.meter("client-request-timeout", "fails")
@@ -45,40 +43,25 @@ class ClientActor(
 
   var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
-  var request: TracedRequest = _
 
-  // Initial timeout
-  context.setReceiveTimeout(initialTimeout)
+  // Open connection
+  IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
   
   /**
    * Behaviours
    */
 
   def receive = {
-    case request: TracedRequest =>
-      // Clear timeout
-      context.setReceiveTimeout(Duration.Undefined)
-
-      // start by establishing a new HTTP connection
-      this.forwarder = Some(sender)
-      this.request = request
-
-      context.become(connect)
-
-      IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
-
-    case ReceiveTimeout =>
-      log.debug("Initial timeout")
-      initialTimeoutsMeter.mark()
-      throw new InitialTimeoutException
-  }
-
-  def connect: Receive = {
     case _: Http.Connected =>
-      // once connected, we can send the request across the connection
+      // Once connected, keep a reference to the connector
       server = sender
+
+      // Notify the PoolSupervisor that the connection is established
+      context.parent ! Connected
+
+      // Wait for a request to arrive
       context.become(waitForRequest)
-      self ! request
+
       openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
@@ -87,6 +70,10 @@ class ClientActor(
     case ev: Http.CommandFailed =>
       log.warning("Command failed ({})", ev)
       connectionFailedMeter.mark()
+
+      // Notify the PoolSupervisor that the connection has failed
+      context.parent ! ConnectionFailed
+
       throw new CommandFailedException(ev)
   }
 
@@ -95,8 +82,7 @@ class ClientActor(
       // Already connected, new request to send
       case request: TracedRequest =>
         // Bind the new forwarder
-        if(sender != self)
-          forwarder = Some(sender)
+        forwarder = Some(sender)
 
         val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
@@ -194,13 +180,16 @@ class ClientActor(
   }
 
   def becomeAvailable() = {
-    forwarder = None
     context.become(waitForRequest)
   }
 
   def forward(msg: Any) = {
-    forwarder.map { forwarder =>
-      forwarder ! msg
+    forwarder match {
+      case Some(f) =>
+        f ! msg
+      case None =>
+        log.warning("Trying to forward message whereas no Forwarder is referenced")
+        throw new Exception
     }
   }
 
@@ -212,27 +201,21 @@ class ClientActor(
 object ClientActor {
   def props(
       destination: InetSocketAddress,
-      initialTimeout: Duration,
       IOconnector: ActorRef)
-      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, initialTimeout, IOconnector, tracer)
+      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, IOconnector, tracer)
+
+  object Connected
+  object ConnectionFailed
+
+  // Thrown whenever the connection is closed by the server, intentionally or not
+  class ConnectionClosedException(command: Http.Event) extends Exception(command.toString)
+
+  // Thrown whenever the connection is closed by the Spray connector (usually when timing out)
+  class ConnectionExpiredException extends Exception
+
+  class CommandFailedException(event: Http.Event) extends Exception(event.toString)
+
+  class SendFailedException(event: Http.Event) extends Exception(event.toString)
+
+  class RequestTimeoutException extends Exception
 }
-
-/**
- * Errors
- */
-
-class InitialTimeoutException extends Exception {
-  override def toString = "InitialTimeoutException"
-}
-
-// Thrown whenever the connection is closed by the server, intentionally or not
-class ConnectionClosedException(command: Http.Event) extends Exception(command.toString)
-
-// Thrown whenever the connection is closed by the Spray connector (usually when timing out)
-class ConnectionExpiredException extends Exception
-
-class CommandFailedException(event: Http.Event) extends Exception(event.toString)
-
-class SendFailedException(event: Http.Event) extends Exception(event.toString)
-
-class RequestTimeoutException extends Exception
