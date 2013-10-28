@@ -1,11 +1,11 @@
 package com.wajam.nlb
 
-import akka.actor.ActorSystem
+import akka.actor.{Props, ActorRef, ActorSystem}
 import akka.io.IO
 import scala.concurrent.duration._
 import spray.can.Http
 import com.wajam.nlb.server.ServerActor
-import com.wajam.nlb.client.SprayConnectionPool
+import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
 import com.wajam.nlb.util.Router
 import com.wajam.tracing.{NullTraceRecorder, LoggingTraceRecorder, ConsoleTraceRecorder, Tracer}
 import com.wajam.nrv.scribe.ScribeTraceRecorder
@@ -13,10 +13,11 @@ import com.wajam.commons.Logging
 import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
-import java.net.InetAddress
+import java.net.{InetSocketAddress, InetAddress}
 import spray.can.server.ServerSettings
 import spray.http.HttpHeaders.Host
 import scala.language.postfixOps
+import com.wajam.nlb.forwarder.ForwarderActor
 
 object Nlb extends App with Logging {
 
@@ -60,12 +61,18 @@ object Nlb extends App with Logging {
                           config.getNodeHttpPort,
                           config.getLocalNodePort)
 
+  object ClientFactory {
+    def apply = ClientActor.props(IO(Http), tracer)(_)
+  }
+
   val pool = new SprayConnectionPool(config.getConnectionPoolMaxSize, config.getConnectionPoolAskTimeout milliseconds)
 
-  val forwarderIdleTimeout = config.getForwarderTimeout milliseconds
+  object ForwarderFactory {
+    def apply = ForwarderActor.props(pool, router, config.getForwarderTimeout milliseconds, tracer)
+  }
 
   // the handler actor replies to incoming HttpRequests
-  val handler = system.actorOf(ServerActor.props(pool, router, forwarderIdleTimeout), name = "ServerHandler")
+  val handler = system.actorOf(ServerActor.props(pool, router, tracer), name = "ServerHandler")
 
   log.info("Dynamically setting server hostname: " + hostname)
 

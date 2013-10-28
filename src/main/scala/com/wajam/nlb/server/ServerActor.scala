@@ -2,7 +2,6 @@ package com.wajam.nlb.server
 
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import scala.concurrent.duration.Duration
 import spray.can.Http
 import spray.http._
 import HttpMethods.GET
@@ -10,13 +9,12 @@ import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.Tracer
 import com.wajam.nlb.util.{ResolvingException, Router}
 import com.wajam.nlb.client.SprayConnectionPool
-import com.wajam.nlb.forwarder.ForwarderActor
+import com.wajam.nlb.Nlb.ForwarderFactory
 
 class ServerActor(
     pool: SprayConnectionPool,
     router: Router,
-    forwarderIdleTimeout: Duration,
-    implicit val tracer: Tracer)
+    tracer: Tracer)
   extends Actor
   with ActorLogging
   with Instrumented {
@@ -40,7 +38,7 @@ class ServerActor(
       sender ! HttpResponse(entity = HttpEntity("Ok"))
 
     case request: HttpRequest =>
-      val forwarder = context.actorOf(ForwarderActor.props(pool, router, forwarderIdleTimeout))
+      val forwarder = context.actorOf(ForwarderFactory.apply)
 
       forwarder forward request
 
@@ -57,6 +55,5 @@ object ServerActor {
   def props(
       pool: SprayConnectionPool,
       router: Router,
-      forwarderIdleTimeout: Duration)
-      (implicit tracer: Tracer) = Props(classOf[ServerActor], pool, router, forwarderIdleTimeout, tracer)
+      tracer: Tracer) = Props(classOf[ServerActor], pool, router, tracer)
 }
