@@ -10,6 +10,7 @@ import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Timing}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
+import ClientActor._
 
 /**
  * Actor handling an HTTP connection with a specific node.
@@ -48,29 +49,25 @@ class ClientActor(
 
   var forwarder: Option[ActorRef] = None
   var server: ActorRef = _
-  var request: TracedRequest = _
-  
+
+  // Open connection
+  IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
+
   /**
    * Behaviours
    */
 
   def receive = {
-    case request: TracedRequest =>
-      // start by establishing a new HTTP connection
-      this.forwarder = Some(sender)
-      this.request = request
-
-      context.become(connect)
-
-      IOconnector ! Http.Connect(destination.getHostString, port = destination.getPort, settings = Some(ClientConnectionSettings(system).copy(responseChunkAggregationLimit = 0)))
-  }
-
-  def connect: Receive = {
     case _: Http.Connected =>
-      // once connected, we can send the request across the connection
+      // Once connected, keep a reference to the connector
       server = sender
+
+      // Notify the PoolSupervisor that the connection is established
+      context.parent ! Connected
+
+      // Wait for a request to arrive
       context.become(waitForRequest)
-      self ! request
+
       openConnectionsCounter += 1
 
       // watch the Spray connector to monitor connection lifecycle
@@ -78,6 +75,9 @@ class ClientActor(
 
     case _: Http.CommandFailed =>
       connectionFailedMeter.mark()
+
+      // Notify the PoolSupervisor that the connection has failed
+      context.parent ! ConnectionFailed
 
       dispatchError(new CommandFailedException)
   }
@@ -87,8 +87,7 @@ class ClientActor(
       // Already connected, new request to send
       case request: TracedRequest =>
         // Bind the new forwarder
-        if(sender != self)
-          forwarder = Some(sender)
+        forwarder = Some(sender)
 
         val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
@@ -182,11 +181,6 @@ class ClientActor(
       dispatchError(new ConnectionClosedException)
   }
 
-  def becomeAvailable(): Unit = {
-    forwarder = None
-    context.become(waitForRequest)
-  }
-
   def forward(msg: Any): Unit = {
     forwarder.map { forwarder =>
       forwarder ! msg
@@ -212,6 +206,10 @@ class ClientActor(
     }
   }
 
+  def becomeAvailable() = {
+    context.become(waitForRequest)
+  }
+
   def dispatchError(e: Exception): Unit = {
     log.debug(e.getMessage)
     forward(e)
@@ -228,21 +226,20 @@ object ClientActor {
       destination: InetSocketAddress,
       IOconnector: ActorRef)
       (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, IOconnector, tracer)
+
+  object Connected
+  object ConnectionFailed
+
+  abstract class ClientException(message: String) extends Exception(message)
+
+  class ConnectionClosedException extends ClientException("Connection closed")
+
+  // Thrown whenever the connection is closed by the Spray connector (usually when timing out)
+  class ConnectionExpiredException extends ClientException("Connection expired")
+
+  class CommandFailedException extends ClientException("Could not connect to server")
+
+  class SendFailedException extends ClientException("Could not write on connection")
+
+  class RequestTimeoutException extends ClientException("Request timed out")
 }
-
-/**
- * Errors
- */
-
-abstract class ClientException(message: String) extends Exception(message)
-
-class ConnectionClosedException extends ClientException("Connection closed")
-
-// Thrown whenever the connection is closed by the Spray connector (usually when timing out)
-class ConnectionExpiredException extends ClientException("Connection expired")
-
-class CommandFailedException extends ClientException("Could not connect to server")
-
-class SendFailedException extends ClientException("Could not write on connection")
-
-class RequestTimeoutException extends ClientException("Request timed out")

@@ -6,10 +6,10 @@ import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Pr
 import spray.http._
 import spray.http.HttpHeaders.Connection
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
-import com.wajam.nlb.client.{ClientException, SprayConnectionPool}
+import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
+import ClientActor.ClientException
 import com.wajam.nlb.util.{Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
-
 
 class ForwarderActor(
     pool: SprayConnectionPool,
@@ -22,7 +22,9 @@ class ForwarderActor(
 
   private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
 
-  // This timeout ensures
+  // This timeout ensures the Forwarder actor doesn't hung up forever,
+  // in case it doesn't receive the request properly.
+  // Network-related timeouts are handled by the Client actor.
   context.setReceiveTimeout(timeout)
 
   def receive = {
@@ -35,26 +37,30 @@ class ForwarderActor(
 
       val destination = router.resolve(request.uri.path.toString)
 
-      // clientActor is the actor handling the connection with the server
-      // Not to be mistaken with client, which is *our* client
-      val clientConnection = pool.getConnection(destination)
+      val connection = pool.getConnection(destination)
 
-      val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
+      withConnection(connection, client) { connection =>
+        val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
 
-      tracer.trace(tracedRequest.context) {
-        tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
-        tracer.record(Annotation.ServerAddress(tracedRequest.address))
+        tracer.trace(tracedRequest.context) {
+          tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
+          tracer.record(Annotation.ServerAddress(tracedRequest.address))
+        }
+
+        context.watch(connection)
+
+        log.debug("Routing to node {} using connection {}", destination, connection)
+
+        connection ! tracedRequest
+
+        context.become(
+          waitForResponse(client, destination, tracedRequest, connection)
+        )
       }
 
-      context.watch(clientConnection)
-
-      log.debug("Routing to node {} using connection {}", destination, clientConnection)
-
-      clientConnection ! tracedRequest
-
-      context.become(
-        waitForResponse(client, destination, tracedRequest, clientConnection)
-      )
+    case ReceiveTimeout =>
+      log.warning("Forwarder initial timeout")
+      context.stop(self)
   }
 
   def waitForResponse(client: ActorRef,
@@ -67,13 +73,16 @@ class ForwarderActor(
            and we haven't transmitted anything yet,
            we fallback on a brand new connection */
         val fallbackClientConnection = pool.getNewConnection(destination)
-        fallbackClientConnection ! tracedRequest
 
         connectionFallbacksMeter.mark()
 
-        context.become(
-          waitForResponse(client, destination, tracedRequest, fallbackClientConnection)
-        )
+        withConnection(fallbackClientConnection, client) { connection =>
+          connection ! tracedRequest
+
+          context.become(
+            waitForResponse(client, destination, tracedRequest, connection)
+          )
+        }
 
       case response: HttpResponse =>
         client ! response
@@ -139,22 +148,21 @@ class ForwarderActor(
         log.debug("Forwarder received MessageChunk")
 
         client ! chunk
-
-      case ReceiveTimeout =>
-        log.debug("Forwarder idle timeout")
-        context.stop(self)
     }
-  }
-
-  def handleTimeout: Receive = {
-    case ReceiveTimeout =>
-      log.warning("Forwarder timeout")
-      context.stop(self)
   }
 
   def handleClientErrors(client: ActorRef): Receive = {
     case e: ClientException =>
       client ! HttpResponse(status = 500, entity = HttpEntity("HTTP client error: " + e.getMessage))
+  }
+
+  def withConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
+    connection match {
+      case Some(connection) =>
+        block(connection)
+      case None =>
+        client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination"))
+    }
   }
 }
 

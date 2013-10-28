@@ -1,21 +1,22 @@
 package com.wajam.nlb.client
 
-import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedDeque, ConcurrentHashMap}
 import java.net.InetSocketAddress
+import scala.collection.JavaConverters._
+import scala.concurrent.Await
+import scala.concurrent.duration._
+import scala.language.postfixOps
 import akka.io.IO
 import akka.actor._
 import akka.actor.SupervisorStrategy._
-import scala.concurrent.Await
-import scala.concurrent.duration._
 import akka.util.Timeout
-import akka.pattern.ask
+import akka.pattern.{AskTimeoutException, ask}
 import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.Tracer
 import com.wajam.commons.Logging
-import scala.language.postfixOps
+import com.wajam.nlb.client.ClientActor.{Connected, ConnectionFailed}
 
 /**
  * Supervisor of all connection actors.
@@ -23,6 +24,7 @@ import scala.language.postfixOps
  * They are watched at all times, even when they are not in the pool (in that case, pool.remove would have no effect).
  */
 class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogging {
+  val forwarderLookup = new collection.mutable.HashMap[ActorRef, ActorRef]()
 
   // Stop the actor on any exception
   override val supervisorStrategy = OneForOneStrategy(loggingEnabled = false) {
@@ -32,11 +34,38 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 
   def receive = {
     case p: Props =>
-      val child = context.actorOf(p)
-      // Return a new actor
-      sender ! child
-      // Watch it
-      context.watch(child)
+      // This is not the actual ForwarderActor ref, just a temporary ask actor.
+      // Do not send anything else than the ClientActor ref.
+      val forwarder = sender
+      val client = context.actorOf(p)
+
+      // Store the Forwarder associated with this connection
+      forwarderLookup += (client -> forwarder)
+      // Watch the connection
+      context.watch(client)
+
+    case Connected =>
+      val client = sender
+
+      forwarderLookup.get(client) match {
+        case Some(forwarder) =>
+          forwarder ! Some(client)
+          forwarderLookup - client
+        case None =>
+          log.warning("Received a Connect message with no associated Forwarder")
+      }
+
+    case ConnectionFailed =>
+      val client = sender
+
+      forwarderLookup.get(client) match {
+        case Some(forwarder) =>
+          forwarder ! None
+          forwarderLookup - client
+        case None =>
+          log.warning("Received a ConnectionFailed message with no associated Forwarder")
+      }
+
     case Terminated(child) =>
       // Remove the actor when he's dead
       pool.remove(child)
@@ -49,15 +78,12 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
  * @param maxSize the maximum amount of connections allowed in the pool
  */
 class SprayConnectionPool(
-    connectionInitialTimeout: Duration,
     maxSize: Int,
-    askTimeout: Long)
+    askTimeout: Duration)
     (implicit system: ActorSystem,
     tracer: Tracer)
   extends Instrumented
   with Logging {
-
-  implicit val implicitAskTimeout = Timeout(askTimeout milliseconds)
 
   private val connectionMap = new ConcurrentHashMap[InetSocketAddress, ConcurrentLinkedDeque[ActorRef]] asScala
   private val currentNbPooledConnections = new AtomicInteger(0)
@@ -67,6 +93,7 @@ class SprayConnectionPool(
   private val poolAddsMeter = metrics.meter("connection-pool-adds", "additions")
   private val poolRemovesMeter = metrics.meter("connection-pool-removes", "removals")
   private val poolRejectionsMeter = metrics.meter("connection-pool-rejections", "rejections")
+  private val connectionPoolAskTimeoutMeter = metrics.meter("connection-pool-ask-timeouts", "timeouts")
   private val connectionPooledDestinationsGauge = metrics.gauge("connection-pooled-destinations-size") {
     connectionMap.size
   }
@@ -120,16 +147,25 @@ class SprayConnectionPool(
   }
 
   // Get a new connection
-  def getNewConnection(destination: InetSocketAddress): ActorRef = {
-    val future = poolSupervisor ? ClientActor.props(destination, IO(Http))
+  def getNewConnection(destination: InetSocketAddress): Option[ActorRef] = {
+    val future = poolSupervisor.ask(ClientActor.props(destination, IO(Http)))(Timeout(askTimeout.toMillis))
+
     connectionPoolCreatesMeter.mark()
-    Await.result(future, askTimeout milliseconds).asInstanceOf[ActorRef]
+
+    try {
+      Await.result(future, askTimeout).asInstanceOf[Option[ActorRef]]
+    }
+    catch {
+      case _: AskTimeoutException =>
+        connectionPoolAskTimeoutMeter.mark()
+        None
+    }
   }
 
   // Get a pooled connection if available, otherwise get a new one
-  def getConnection(destination: InetSocketAddress): ActorRef = {
+  def getConnection(destination: InetSocketAddress): Option[ActorRef] = {
     getPooledConnection(destination: InetSocketAddress) match {
-      case Some(pooledConnection) =>
+      case pooledConnection @ Some(_) =>
         log.debug("Using a pooled connection")
         pooledConnection
       case None => {

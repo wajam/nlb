@@ -1,14 +1,15 @@
 package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
+import scala.language.postfixOps
+import scala.concurrent.duration._
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfter, FunSuite}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
 import org.scalatest.mock.MockitoSugar
 import akka.actor._
-import scala.concurrent.duration._
-import akka.testkit.TestActorRef
+import akka.testkit.{ImplicitSender, TestKit, TestActorRef}
 import akka.util.Timeout
 import com.wajam.tracing.{NullTraceRecorder, Tracer}
 
@@ -19,35 +20,29 @@ class DummyActor extends Actor {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoSugar {
+class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoSugar {
   implicit val tracer = new Tracer(NullTraceRecorder)
 
   implicit val system = ActorSystem("TestSprayConnectionPool")
   val destination = new InetSocketAddress("127.0.0.1", 9999)
 
   val connectionIdleTimeout = 5000
-  val connectionInitialTimeout = 1000
 
-  var pool: SprayConnectionPool = _
-  var dummyConnectionActor: DummyActor = _
-  var dummyConnectionRef: TestActorRef[DummyActor] = _
-  var currentTime = 0L
+  trait Builder {
+    val pool = new SprayConnectionPool(1, 1 second)
 
-  before {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 100, 200)
-
-    dummyConnectionRef = TestActorRef(new DummyActor)
-    dummyConnectionActor = dummyConnectionRef.underlyingActor
+    val dummyConnectionRef = TestActorRef(new DummyActor)
+    val dummyConnectionActor = dummyConnectionRef.underlyingActor
   }
 
-  test("should pool connection") {
+  "The connection pool" should "pool connection" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
     val connection = pool.getConnection(destination)
 
-    connection should equal (dummyConnectionRef)
+    connection should equal (Some(dummyConnectionRef))
   }
 
-  test("should be empty after removing only connection") {
+  it should "be empty after removing only connection" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
 
     pool.remove(dummyConnectionRef)
@@ -55,16 +50,12 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
     pool.getPooledConnection(destination) should equal (None)
   }
 
-  test("should reject if max size is reached") {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
-
+  it should "reject if max size is reached" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
   }
 
-  test("should allow if size less than maximum") {
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
-
+  it should "allow if size less than maximum" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
     pool.poolConnection(destination, dummyConnectionRef) should be (false)
 
@@ -73,40 +64,61 @@ class TestSprayConnectionPool extends FunSuite with BeforeAndAfter with MockitoS
     pool.poolConnection(destination, dummyConnectionRef) should be (true)
   }
 
-  test("should return None if empty") {
+  it should "return None if empty" in new Builder {
     pool.getPooledConnection(destination) should equal (None)
   }
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestPoolSupervisor extends FunSuite with BeforeAndAfter {
+class TestPoolSupervisor(_system: ActorSystem)
+  extends TestKit(_system)
+  with ImplicitSender
+  with FlatSpec
+  with BeforeAndAfter
+  with BeforeAndAfterAll {
+
   implicit val tracer = new Tracer(NullTraceRecorder)
-  implicit var system: ActorSystem = _
   val destination = new InetSocketAddress("127.0.0.1", 9999)
   implicit val askTimeout: Timeout = 200 milliseconds
-  val connectionInitialTimeout = 1000
-  var pool: SprayConnectionPool = _
-  var connectionRef: TestActorRef[ClientActor] = _
-  var poolSupervisorRef: TestActorRef[PoolSupervisor] = _
-  var IOconnector: TestActorRef[DummyActor] = _
 
-  before {
-    system = ActorSystem("TestPoolSupervisor")
-    pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 200)
-    poolSupervisorRef = TestActorRef(Props(new PoolSupervisor(pool)))
-    IOconnector = TestActorRef(Props(new DummyActor()))
-    connectionRef = TestActorRef(ClientActor.props(destination, IOconnector), poolSupervisorRef, "connection-mock-actor")
-    poolSupervisorRef.watch(connectionRef)
-    pool.poolConnection(destination, connectionRef)
+  def this() = this(ActorSystem("TestActorSystem"))
+
+  trait Builder {
+    class SuccessfulClient extends DummyActor {
+      supervisor ! ClientActor.Connected
+    }
+
+    class FailingClient extends DummyActor {
+      supervisor ! ClientActor.ConnectionFailed
+    }
+
+    val pool = new SprayConnectionPool(1, 1 second)
+    val supervisor = TestActorRef(Props(new PoolSupervisor(pool)))
   }
 
-  after {
-    system.shutdown()
-    system.awaitTermination()
+  override def afterAll {
+    TestKit.shutdownActorSystem(system)
   }
 
-  test("should kill a connection and remove it from the pool once it dies") {
-    connectionRef.stop()
+  "The pool supervisor" should "respond with a client once it is connected" in new Builder {
+    supervisor ! Props(new SuccessfulClient)
+
+    expectMsgClass(classOf[Some[ActorRef]])
+  }
+
+  it should "respond with None if its connection fails" in new Builder {
+    supervisor ! Props(new FailingClient)
+
+    expectMsg(None)
+  }
+
+  it should "kill a connection and remove it from the pool once it dies" in new Builder {
+    val client = TestActorRef(Props(new SuccessfulClient))
+
+    supervisor.watch(client)
+    pool.poolConnection(destination, client)
+
+    client.stop()
 
     pool.getPooledConnection(destination) should equal (None)
   }
