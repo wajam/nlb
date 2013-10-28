@@ -48,7 +48,7 @@ class ServerActor(
 
     case Timedout =>
       timeoutMeter.mark()
-      sender ! HttpResponse(status = 500, entity = HttpEntity("Request timed out: couldn't get response in time"))
+      sender ! HttpResponse(status = 504, entity = HttpEntity("Request timed out: couldn't get response in time"))
   }
 }
 

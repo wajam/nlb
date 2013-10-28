@@ -4,11 +4,10 @@ import java.net.InetSocketAddress
 import scala.concurrent.duration.Duration
 import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import spray.http._
-import spray.http.HttpHeaders.Connection
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
 import ClientActor.ClientException
-import com.wajam.nlb.util.{Timing, Router, TracedRequest}
+import com.wajam.nlb.util.{SprayUtils, Timing, Router, TracedRequest}
 import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
 class ForwarderActor(
@@ -128,7 +127,7 @@ class ForwarderActor(
           tracer.record(Annotation.ServerSend(None))
         }
 
-        if(!chunkEnd.trailer.exists { case x: Connection if x.hasClose => true; case _ => false }) {
+        if(!SprayUtils.hasConnectionClose(chunkEnd.trailer)) {
           log.debug("Pooling connection")
           pool.poolConnection(destination, clientConnection)
         }
@@ -154,6 +153,7 @@ class ForwarderActor(
   def handleClientErrors(client: ActorRef): Receive = {
     case e: ClientException =>
       client ! HttpResponse(status = 500, entity = HttpEntity("HTTP client error: " + e.getMessage))
+      context.stop(self)
   }
 
   def withConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
@@ -162,6 +162,7 @@ class ForwarderActor(
         block(connection)
       case None =>
         client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination"))
+        context.stop(self)
     }
   }
 }

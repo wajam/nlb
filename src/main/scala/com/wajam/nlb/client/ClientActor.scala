@@ -185,7 +185,7 @@ class ClientActor(
     forwarder.map { forwarder =>
       forwarder ! msg
 
-      def extractStatus(msg: Any) = msg match {
+      val status = msg match {
         case responseStart: ChunkedResponseStart =>
           Some(responseStart.message.status)
         case response: HttpResponse =>
@@ -194,7 +194,7 @@ class ClientActor(
           None
       }
 
-      for(status <- extractStatus(msg)) status match {
+      status.foreach {
         case Success(_) =>
           http2xxMeter.mark()
         case ClientError(_) =>
