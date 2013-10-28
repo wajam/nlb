@@ -60,9 +60,9 @@ object Nlb extends App with Logging {
                           config.getNodeHttpPort,
                           config.getLocalNodePort)
 
-  val pool = new SprayConnectionPool(config.getClientInitialTimeout milliseconds, config.getConnectionPoolMaxSize, config.getConnectionPoolAskTimeout milliseconds)
+  val pool = new SprayConnectionPool(config.getConnectionPoolMaxSize, config.getConnectionPoolAskTimeout milliseconds)
 
-  val forwarderIdleTimeout = config.getForwarderIdleTimeout milliseconds
+  val forwarderIdleTimeout = config.getForwarderTimeout milliseconds
 
   // the handler actor replies to incoming HttpRequests
   val handler = system.actorOf(ServerActor.props(pool, router, forwarderIdleTimeout), name = "ServerHandler")

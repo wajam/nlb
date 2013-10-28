@@ -78,7 +78,6 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
  * @param maxSize the maximum amount of connections allowed in the pool
  */
 class SprayConnectionPool(
-    connectionInitialTimeout: Duration,
     maxSize: Int,
     askTimeout: Duration)
     (implicit system: ActorSystem,
@@ -150,6 +149,7 @@ class SprayConnectionPool(
   // Get a new connection
   def getNewConnection(destination: InetSocketAddress): Option[ActorRef] = {
     val future = poolSupervisor.ask(ClientActor.props(destination, IO(Http)))(Timeout(askTimeout.toMillis))
+
     connectionPoolCreatesMeter.mark()
 
     try {

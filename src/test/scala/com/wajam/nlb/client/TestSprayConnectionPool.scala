@@ -27,10 +27,9 @@ class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoS
   val destination = new InetSocketAddress("127.0.0.1", 9999)
 
   val connectionIdleTimeout = 5000
-  val connectionInitialTimeout = 1000
 
   trait Builder {
-    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 1 second)
+    val pool = new SprayConnectionPool(1, 1 second)
 
     val dummyConnectionRef = TestActorRef(new DummyActor)
     val dummyConnectionActor = dummyConnectionRef.underlyingActor
@@ -81,7 +80,6 @@ class TestPoolSupervisor(_system: ActorSystem)
   implicit val tracer = new Tracer(NullTraceRecorder)
   val destination = new InetSocketAddress("127.0.0.1", 9999)
   implicit val askTimeout: Timeout = 200 milliseconds
-  val connectionInitialTimeout = 1000
 
   def this() = this(ActorSystem("TestActorSystem"))
 
@@ -94,7 +92,7 @@ class TestPoolSupervisor(_system: ActorSystem)
       supervisor ! ClientActor.ConnectionFailed
     }
 
-    val pool = new SprayConnectionPool(connectionInitialTimeout milliseconds, 1, 1 second)
+    val pool = new SprayConnectionPool(1, 1 second)
     val supervisor = TestActorRef(Props(new PoolSupervisor(pool)))
   }
 

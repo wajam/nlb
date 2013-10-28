@@ -1,6 +1,7 @@
 package com.wajam.nlb.client
 
 import java.net.InetSocketAddress
+import scala.language.postfixOps
 import scala.concurrent.duration._
 import scala.util.Random
 import org.junit.runner.RunWith

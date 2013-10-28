@@ -1,8 +1,8 @@
 package com.wajam.nlb.util
 
-import spray.http._
 import java.net.InetSocketAddress
-import spray.http.HttpHeaders.RawHeader
+import spray.http._
+import spray.http.HttpHeaders.{Connection, RawHeader}
 
 object SprayUtils {
 
@@ -32,6 +32,11 @@ object SprayUtils {
 
     case other =>
       other
+  }
+
+  def hasConnectionClose(headers: List[HttpHeader]) = headers.exists {
+    case x: Connection if x.hasClose => true
+    case _ => false
   }
 
   def withHeadersStripped(response: HttpResponse): HttpResponse = {

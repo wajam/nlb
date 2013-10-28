@@ -36,10 +36,6 @@ class NlbConfiguration(config: Config) {
     config.getInt("nlb.server.listen-port")
   }
 
-  def getClientInitialTimeout: Long = {
-    config.getMilliseconds("nlb.client.initial-timeout")
-  }
-
   def getConnectionPoolMaxSize: Int = {
     config.getInt("nlb.connection-pool.max-size")
   }
@@ -84,7 +80,7 @@ class NlbConfiguration(config: Config) {
     config.getInt("nlb.trace.sampling-rate")
   }
 
-  def getForwarderIdleTimeout: Long = {
-    config.getMilliseconds("nlb.forwarder.idle-timeout")
+  def getForwarderTimeout: Long = {
+    config.getMilliseconds("nlb.forwarder.timeout")
   }
 }
