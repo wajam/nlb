@@ -105,7 +105,7 @@ class ClientActor(
     }
   }
 
-  def waitForResponse(subContext: Option[TraceContext]): Receive = handleErrors orElse {
+  def waitForResponse(implicit subContext: Option[TraceContext]): Receive = handleErrors orElse {
     // Chunked responses
     case responseStart: ChunkedResponseStart =>
       forward(responseStart)
@@ -121,18 +121,15 @@ class ClientActor(
       log.debug("Received a chunked response start")
 
     // Unchunked responses
-    case response@ HttpResponse(status, entity, _, _) =>
-      forward(response)
+    case response @ HttpResponse(statusCode, _, _, _) =>
+      val status = statusCode.intValue
 
-      tracer.trace(subContext) {
-        tracer.record(Annotation.ClientRecv(Some(response.status.intValue)))
-      }
+      handleResponse(response, status)
+
       clusterReplyTimer.stop()
-
-      becomeAvailable()
-
       unchunkedResponsesMeter.mark()
-      log.debug("Received {} response with {} bytes", status, entity.buffer.length)
+
+      log.debug("Received {} response", status)
 
     // Specific errors
     case _: Http.SendFailed =>
@@ -141,27 +138,35 @@ class ClientActor(
       dispatchError(new SendFailedException)
   }
 
-  def streamResponse(subContext: Option[TraceContext], statusCode: Int): Receive = handleErrors orElse {
+  def streamResponse(implicit subContext: Option[TraceContext], status: Int): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       forward(chunk)
       log.debug("Received a chunk")
       totalChunksMeter.mark()
 
     case responseEnd: ChunkedMessageEnd =>
-      forward(responseEnd)
+      handleResponse(responseEnd, status)
 
-      tracer.trace(subContext) {
-        tracer.record(Annotation.ClientRecv(Some(statusCode)))
-      }
       chunkTransferTimer.stop()
-
-      becomeAvailable()
 
       log.debug("Received a chunked response end")
   }
 
   // All types of connection closing are already handled in handleErrors
   def closeConnection: Receive = handleErrors
+
+  // Common way of handling HttpResponse and ChunkedMessageEnd
+  def handleResponse(response: HttpResponsePart, status: Int)(implicit subContext: Option[TraceContext]) = {
+    // The connection will potentially be placed back in the pool:
+    // make it ready to accept new requests
+    context.become(waitForRequest)
+
+    forward(response)
+
+    tracer.trace(subContext) {
+      tracer.record(Annotation.ClientRecv(Some(status)))
+    }
+  }
 
   // Connection failures that can arise anytime (except in initial and connect modes)
   def handleErrors: Receive = {
@@ -204,10 +209,6 @@ class ClientActor(
         case _ =>
       }
     }
-  }
-
-  def becomeAvailable() = {
-    context.become(waitForRequest)
   }
 
   def dispatchError(e: Exception): Unit = {
