@@ -9,7 +9,6 @@ import spray.can.client.ClientConnectionSettings
 import com.yammer.metrics.scala.Instrumented
 import com.wajam.tracing.{TraceContext, RpcName, Annotation, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Timing}
-import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 import ClientActor._
 
 /**
@@ -83,26 +82,24 @@ class ClientActor(
   }
 
   def waitForRequest: Receive = handleErrors orElse {
-    sanitizeHeaders andThen {
-      // Already connected, new request to send
-      case request: TracedRequest =>
-        // Bind the new forwarder
-        forwarder = Some(sender)
+    // Already connected, new request to send
+    case request: TracedRequest =>
+      // Bind the new forwarder
+      forwarder = Some(sender)
 
-        val subContext = request.context.map { context => tracer.createSubcontext(context) }
+      val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
-        tracer.trace(subContext) {
-          tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
-          tracer.record(Annotation.ClientAddress(request.address))
-        }
+      tracer.trace(subContext) {
+        tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
+        tracer.record(Annotation.ClientAddress(request.address))
+      }
 
-        clusterReplyTimer.start()
+      clusterReplyTimer.start()
 
-        server ! request.withNewContext(subContext).get
+      server ! request.withNewContext(subContext).get
 
-        context.become(waitForResponse(subContext))
-        log.debug("Received a new request to send")
-    }
+      context.become(waitForResponse(subContext))
+      log.debug("Received a new request to send")
   }
 
   def waitForResponse(implicit subContext: Option[TraceContext]): Receive = handleErrors orElse {

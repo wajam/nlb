@@ -8,7 +8,6 @@ import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
 import ClientActor.ClientException
 import com.wajam.nlb.util.{SprayUtils, Timing, Router, TracedRequest}
-import com.wajam.nlb.util.SprayUtils.sanitizeHeaders
 
 class ForwarderActor(
     pool: SprayConnectionPool,
@@ -32,29 +31,36 @@ class ForwarderActor(
 
       log.debug("Starting forwarding response for {}...", request)
 
-      val totalTimeTimer = timer("round-trip-total-time")
+      try {
+        val totalTimeTimer = timer("round-trip-total-time")
 
-      val destination = router.resolve(request.uri.path.toString)
+        val destination = router.resolve(request.uri.path.toString)
 
-      val connection = pool.getConnection(destination)
+        val connection = pool.getConnection(destination)
 
-      withConnection(connection, client) { connection =>
-        val tracedRequest = TracedRequest(request, totalTimeTimer).withNewHost(destination)
+        withConnection(connection, client) { connection =>
+          val preparedRequest = SprayUtils.prepareRequest(request, destination)
+          val tracedRequest = TracedRequest(preparedRequest, totalTimeTimer)
 
-        tracer.trace(tracedRequest.context) {
-          tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
-          tracer.record(Annotation.ServerAddress(tracedRequest.address))
+          tracer.trace(tracedRequest.context) {
+            tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
+            tracer.record(Annotation.ServerAddress(tracedRequest.address))
+          }
+
+          context.watch(connection)
+
+          log.debug("Routing to node {} using connection {}", destination, connection)
+
+          connection ! tracedRequest
+
+          context.become(
+            waitForResponse(client, destination, tracedRequest, connection)
+          )
         }
-
-        context.watch(connection)
-
-        log.debug("Routing to node {} using connection {}", destination, connection)
-
-        connection ! tracedRequest
-
-        context.become(
-          waitForResponse(client, destination, tracedRequest, connection)
-        )
+      }
+      catch {
+        case e: Throwable =>
+          client ! HttpResponse(status = 500, entity = HttpEntity(e.getMessage))
       }
 
     case ReceiveTimeout =>
@@ -66,88 +72,80 @@ class ForwarderActor(
                       destination: InetSocketAddress,
                       tracedRequest: TracedRequest,
                       clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
-    sanitizeHeaders andThen {
-      case Terminated(_) =>
-        /* When the connection from the pool dies (possible race),
-           and we haven't transmitted anything yet,
-           we fallback on a brand new connection */
-        val fallbackClientConnection = pool.getNewConnection(destination)
+    case Terminated(_) =>
+      /* When the connection from the pool dies (possible race),
+         and we haven't transmitted anything yet,
+         we fallback on a brand new connection */
+      val fallbackClientConnection = pool.getNewConnection(destination)
 
-        connectionFallbacksMeter.mark()
+      connectionFallbacksMeter.mark()
 
-        withConnection(fallbackClientConnection, client) { connection =>
-          connection ! tracedRequest
+      withConnection(fallbackClientConnection, client) { connection =>
+        connection ! tracedRequest
 
-          context.become(
-            waitForResponse(client, destination, tracedRequest, connection)
-          )
-        }
-
-      case response: HttpResponse =>
-        client ! response
-
-        tracer.trace(tracedRequest.context) {
-          tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
-        }
-        tracedRequest.timer.stop()
-
-        if(!response.connectionCloseExpected) {
-          log.debug("Pooling connection")
-          pool.poolConnection(destination, clientConnection)
-        }
-        context.stop(self)
-
-      case responseStart: ChunkedResponseStart =>
-        log.debug("Forwarder received ChunkedResponseStart")
-
-        client ! responseStart
-
-        tracer.trace(tracedRequest.context) {
-          tracer.record(Annotation.Message("First chunk sent"))
-        }
-
-        context.unwatch(clientConnection)
         context.become(
-          streamResponse(client, destination, tracedRequest, clientConnection)
+          waitForResponse(client, destination, tracedRequest, connection)
         )
-    }
+      }
+
+    case response: HttpResponse =>
+      val preparedResponse = SprayUtils.prepareResponse(response)
+
+      client ! preparedResponse
+
+      tracer.trace(tracedRequest.context) {
+        tracer.record(Annotation.ServerSend(Some(response.status.intValue)))
+      }
+      tracedRequest.timer.stop()
+
+      // Connection-close header is altered by prepareResponse()
+      // Here, we check against the value returned by the endpoint
+      // (not the one that we will eventually return to the client)
+      if(!response.connectionCloseExpected) {
+        log.debug("Pooling connection")
+        pool.poolConnection(destination, clientConnection)
+      }
+      context.stop(self)
+
+    case responseStart: ChunkedResponseStart =>
+      val preparedResponseStart = SprayUtils.prepareResponseStart(responseStart)
+
+      client ! preparedResponseStart
+
+      tracer.trace(tracedRequest.context) {
+        tracer.record(Annotation.Message("First chunk sent"))
+      }
+
+      context.unwatch(clientConnection)
+      context.become(
+        streamResponse(client, destination, tracedRequest, clientConnection)
+      )
   }
 
   def streamResponse(client: ActorRef,
                      destination: InetSocketAddress,
                      tracedRequest: TracedRequest,
                      clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
-    sanitizeHeaders andThen {
-      case chunkEnd: ChunkedMessageEnd =>
-        client ! chunkEnd
+    case responseEnd: ChunkedMessageEnd =>
+      client ! responseEnd
 
-        log.debug("Forwarder received ChunkedMessageEnd")
+      log.debug("Forwarder received ChunkedMessageEnd")
 
-        tracer.trace(tracedRequest.context) {
-          tracer.record(Annotation.ServerSend(None))
-        }
+      tracer.trace(tracedRequest.context) {
+        tracer.record(Annotation.ServerSend(None))
+      }
 
-        if(!SprayUtils.hasConnectionClose(chunkEnd.trailer)) {
-          log.debug("Pooling connection")
-          pool.poolConnection(destination, clientConnection)
-        }
-        tracedRequest.timer.stop()
-        context.stop(self)
+      if(!SprayUtils.hasConnectionClose(responseEnd.trailer)) {
+        log.debug("Pooling connection")
+        pool.poolConnection(destination, clientConnection)
+      }
+      tracedRequest.timer.stop()
+      context.stop(self)
 
-      case responseStart: ChunkedResponseStart =>
-        log.debug("Forwarder received ChunkedResponseStart")
+    case chunk: MessageChunk =>
+      log.debug("Forwarder received MessageChunk")
 
-        client ! responseStart
-
-        tracer.trace(tracedRequest.context) {
-          tracer.record(Annotation.Message("First chunk sent"))
-        }
-
-      case chunk: MessageChunk =>
-        log.debug("Forwarder received MessageChunk")
-
-        client ! chunk
-    }
+      client ! chunk
   }
 
   def handleClientErrors(client: ActorRef): Receive = {

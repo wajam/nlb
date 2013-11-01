@@ -1,57 +1,80 @@
 package com.wajam.nlb.util
 
-import org.scalatest.FunSuite
+import java.net.InetSocketAddress
+import org.scalatest.FlatSpec
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
-import spray.http.{Uri, HttpRequest}
-import spray.http.HttpHeaders.RawHeader
-import SprayUtils.HttpHeaders._
-import java.net.InetSocketAddress
+import spray.http._
+import spray.http.HttpHeaders._
+import spray.http.ContentTypes.`text/plain`
+import SprayUtils._
 
 @RunWith(classOf[JUnitRunner])
-class TestSprayUtils extends FunSuite {
+class TestSprayUtils extends FlatSpec {
 
-  test("should strip all headers handled by Spray") {
-    val forbiddenHeaders = List(
-      new RawHeader(CONTENT_TYPE, "text/plain"),
-      new RawHeader(CONTENT_LENGTH, "0"),
-      new RawHeader(TRANSFER_ENCODING, "gzip"),
-      new RawHeader(USER_AGENT, "spray-can/1.x"),
-      new RawHeader(CONNECTION, "close")
-    )
+  val forbiddenHeaders = List(
+    `Content-Length`(1234),
+    `Content-Type`(`text/plain`),
+    `Transfer-Encoding`("gzip"),
+    `User-Agent`("spray-can/1.x"),
+    Connection("close")
+  )
 
-    val allowedHeaders = List(
-      new RawHeader("nrv-method-header", "GET")
-    )
+  val allowedHeaders = List(
+    new RawHeader("nrv-method-header", "GET")
+  )
 
-    val allHeaders = forbiddenHeaders ++ allowedHeaders
+  val destination = new InetSocketAddress("endpoint.example.org", 8899)
 
-    val request = new HttpRequest(headers = allHeaders)
-
-    val stripedRequest = SprayUtils.withHeadersStripped(request)
-
-    stripedRequest.headers should equal(allowedHeaders)
-  }
-
-  test("should set the destination's URI and Host header") {
+  trait WithRequest {
     val relativePath = "/foo/bar"
     val request = new HttpRequest(
       uri = Uri("http://nlb.example.org:8080" + relativePath),
       headers = List(
-        new RawHeader(HOST, "nlb.example.org")
-      )
+        Host("nlb.example.org", 8080)
+      ) ++ forbiddenHeaders ++ allowedHeaders
     )
 
-    val destination = new InetSocketAddress("endpoint.example.org", 8899)
+    val preparedRequest = prepareRequest(request, destination)
+  }
 
-    val forwardedRequest = SprayUtils.withNewHost(request, destination)
+  "SprayUtils" should "strip headers handled by Spray when preparing a request" in new WithRequest {
+    forbiddenHeaders.foreach { header =>
+      preparedRequest.headers should not contain(header)
+    }
+  }
 
-    forwardedRequest.headers should equal(
-      List(new RawHeader(HOST, destination.getHostName + ":" + destination.getPort))
+  it should "set the proper Host header when preparing a request" in new WithRequest {
+    preparedRequest.headers should contain(
+      Host(destination).asInstanceOf[HttpHeader]
     )
-    forwardedRequest.uri should equal(
-      Uri("http://" + destination.getHostName + ":" + destination.getPort + relativePath)
+  }
+
+  it should "set the `Connection: keep-alive` header when preparing a request" in new WithRequest {
+    preparedRequest.headers should contain(
+      Connection("keep-alive").asInstanceOf[HttpHeader]
     )
+  }
+
+  it should "set the the URI as relative when preparing a request" in new WithRequest {
+    preparedRequest.uri should equal(
+      Uri(relativePath)
+    )
+  }
+
+  trait WithResponse {
+    val headers = forbiddenHeaders ++ allowedHeaders
+    val response = HttpResponse(headers = headers)
+  }
+
+  it should "strip headers handled by Spray when preparing a HttpResponse" in new WithResponse {
+    prepareResponse(response).headers should equal(allowedHeaders)
+  }
+
+  it should "strip headers handled by Spray when preparing a ChunkedResponseStart" in new WithResponse {
+    val responseStart = ChunkedResponseStart(response)
+
+    prepareResponseStart(responseStart).response.headers should equal(allowedHeaders)
   }
 }
