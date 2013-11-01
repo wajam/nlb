@@ -65,16 +65,17 @@ class TestSprayUtils extends FlatSpec {
 
   trait WithResponse {
     val headers = forbiddenHeaders ++ allowedHeaders
+    val keepaliveHeader = Connection("keep-alive")
     val response = HttpResponse(headers = headers)
   }
 
-  it should "strip headers handled by Spray when preparing a HttpResponse" in new WithResponse {
-    prepareResponse(response).headers should equal(allowedHeaders)
+  it should "strip headers handled by Spray and respect original Connection header when preparing a HttpResponse" in new WithResponse {
+    prepareResponse(response, Some(keepaliveHeader)).headers should equal(allowedHeaders :+ keepaliveHeader)
   }
 
-  it should "strip headers handled by Spray when preparing a ChunkedResponseStart" in new WithResponse {
+  it should "strip headers handled by Spray and respect original Connection header when preparing a ChunkedResponseStart" in new WithResponse {
     val responseStart = ChunkedResponseStart(response)
 
-    prepareResponseStart(responseStart).response.headers should equal(allowedHeaders)
+    prepareResponseStart(responseStart, Some(keepaliveHeader)).response.headers should equal(allowedHeaders :+ keepaliveHeader)
   }
 }

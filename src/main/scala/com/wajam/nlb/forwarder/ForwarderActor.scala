@@ -8,6 +8,7 @@ import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
 import ClientActor.ClientException
 import com.wajam.nlb.util.{SprayUtils, Timing, Router, TracedRequest}
+import spray.http.HttpHeaders.Connection
 
 class ForwarderActor(
     pool: SprayConnectionPool,
@@ -53,8 +54,10 @@ class ForwarderActor(
 
           connection ! tracedRequest
 
+          val connectionHeader = SprayUtils.getConnectionHeader(request)
+
           context.become(
-            waitForResponse(client, destination, tracedRequest, connection)
+            waitForResponse(client, destination, tracedRequest, connectionHeader, connection)
           )
         }
       }
@@ -71,6 +74,7 @@ class ForwarderActor(
   def waitForResponse(client: ActorRef,
                       destination: InetSocketAddress,
                       tracedRequest: TracedRequest,
+                      connectionHeader: Option[Connection],
                       clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
     case Terminated(_) =>
       /* When the connection from the pool dies (possible race),
@@ -84,12 +88,12 @@ class ForwarderActor(
         connection ! tracedRequest
 
         context.become(
-          waitForResponse(client, destination, tracedRequest, connection)
+          waitForResponse(client, destination, tracedRequest, connectionHeader, connection)
         )
       }
 
     case response: HttpResponse =>
-      val preparedResponse = SprayUtils.prepareResponse(response)
+      val preparedResponse = SprayUtils.prepareResponse(response, connectionHeader)
 
       client ! preparedResponse
 
@@ -108,7 +112,7 @@ class ForwarderActor(
       context.stop(self)
 
     case responseStart: ChunkedResponseStart =>
-      val preparedResponseStart = SprayUtils.prepareResponseStart(responseStart)
+      val preparedResponseStart = SprayUtils.prepareResponseStart(responseStart, connectionHeader)
 
       client ! preparedResponseStart
 

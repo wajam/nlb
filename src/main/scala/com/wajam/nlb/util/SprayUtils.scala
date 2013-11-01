@@ -34,11 +34,13 @@ object SprayUtils {
     }
   }
 
-  def prepareResponse(response: HttpResponse): HttpResponse =
-    response.withHeaders(stripResponseHeaders(response.headers))
+  def prepareResponse(response: HttpResponse, connectionHeader: Option[Connection]): HttpResponse = {
+    val headers = stripResponseHeaders(response.headers) ++ connectionHeader.toList
+    response.withHeaders(headers)
+  }
 
-  def prepareResponseStart(responseStart: ChunkedResponseStart): ChunkedResponseStart = {
-    val headers = stripResponseHeaders(responseStart.response.headers)
+  def prepareResponseStart(responseStart: ChunkedResponseStart, connectionHeader: Option[Connection]): ChunkedResponseStart = {
+    val headers = stripResponseHeaders(responseStart.response.headers) ++ connectionHeader.toList
     val response = responseStart.response.withHeaders(headers)
 
     ChunkedResponseStart(response)
@@ -51,5 +53,11 @@ object SprayUtils {
   def hasConnectionClose(headers: List[HttpHeader]) = headers.exists {
     case x: Connection if x.hasClose => true
     case _ => false
+  }
+
+  def getConnectionHeader(request: HttpRequest): Option[Connection] = {
+    request.headers.collectFirst {
+      case x: Connection => x
+    }
   }
 }
