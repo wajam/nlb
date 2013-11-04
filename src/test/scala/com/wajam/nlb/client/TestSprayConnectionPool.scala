@@ -3,6 +3,7 @@ package com.wajam.nlb.client
 import java.net.InetSocketAddress
 import scala.language.postfixOps
 import scala.concurrent.duration._
+import scala.concurrent.Await
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
@@ -37,9 +38,9 @@ class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoS
 
   "The connection pool" should "pool connection" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
-    val connection = pool.getConnection(destination)
+    val connection = Await.result(pool.getConnection(destination), 100 milliseconds)
 
-    connection should equal (Some(dummyConnectionRef))
+    connection should equal (dummyConnectionRef)
   }
 
   it should "be empty after removing only connection" in new Builder {

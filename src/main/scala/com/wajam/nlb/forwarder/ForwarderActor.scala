@@ -2,6 +2,9 @@ package com.wajam.nlb.forwarder
 
 import java.net.InetSocketAddress
 import scala.concurrent.duration.Duration
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.util.{Success, Failure}
 import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import spray.http._
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
@@ -158,12 +161,12 @@ class ForwarderActor(
       context.stop(self)
   }
 
-  def withConnection[A](connection: Option[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
-    connection match {
-      case Some(connection) =>
+  def withConnection[A](connectionFuture: Future[ActorRef], client: ActorRef)(block: (ActorRef) => A) = {
+    connectionFuture onComplete {
+      case Success(connection) =>
         block(connection)
-      case None =>
-        client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination"))
+      case Failure(e) =>
+        client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination: " + e.getMessage))
         context.stop(self)
     }
   }

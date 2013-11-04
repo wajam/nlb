@@ -3,6 +3,7 @@ package com.wajam.nlb.forwarder
 import java.net.InetSocketAddress
 import scala.language.postfixOps
 import scala.concurrent.duration._
+import scala.concurrent.Future
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
 import org.scalatest.junit.JUnitRunner
@@ -61,8 +62,8 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
     clientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
     newClientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
 
-    when(pool.getNewConnection(destination)).thenReturn(Some(newClientActorRef))
-    when(pool.getConnection(destination)).thenReturn(Some(clientActorRef))
+    when(pool.getNewConnection(destination)).thenReturn(Future.successful(newClientActorRef))
+    when(pool.getConnection(destination)).thenReturn(Future.successful(clientActorRef))
 
     forwarderRef = TestActorRef(Props(new ForwarderActor(pool, router, idleTimeout, tracer)))
 
