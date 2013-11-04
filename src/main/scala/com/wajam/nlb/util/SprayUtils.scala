@@ -23,7 +23,7 @@ object SprayUtils {
 
     request.copy(
       // Set a relative path as URI, discarding NLB's hostname and port
-      uri = Uri(request.uri.path.toString),
+      uri = Uri(request.uri.path.toString + request.uri.query.toString),
       headers = headers
     )
   }
