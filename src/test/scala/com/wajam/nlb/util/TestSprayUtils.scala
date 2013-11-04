@@ -28,7 +28,7 @@ class TestSprayUtils extends FlatSpec {
   val destination = new InetSocketAddress("endpoint.example.org", 8899)
 
   trait WithRequest {
-    val relativePath = "/foo/bar"
+    val relativePath = "/foo/bar?arg1=foo&arg2=bar"
     val request = new HttpRequest(
       uri = Uri("http://nlb.example.org:8080" + relativePath),
       headers = List(
