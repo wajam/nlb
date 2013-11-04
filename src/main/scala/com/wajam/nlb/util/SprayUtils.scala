@@ -2,36 +2,52 @@ package com.wajam.nlb.util
 
 import java.net.InetSocketAddress
 import spray.http._
-import spray.http.HttpHeaders.{Connection, RawHeader}
+import spray.http.HttpHeaders.{Connection, Host}
 
 object SprayUtils {
 
-  object HttpHeaders {
-    val CONTENT_TYPE = "Content-Type"
-    val CONTENT_LENGTH = "Content-Length"
-    val TRANSFER_ENCODING = "Transfer-Encoding"
-    val USER_AGENT = "User-Agent"
-    val CONNECTION = "Connection"
-    val HOST = "Host"
+  val CONTENT_TYPE = "content-type"
+  val CONTENT_LENGTH = "content-length"
+  val TRANSFER_ENCODING = "transfer-encoding"
+  val USER_AGENT = "user-agent"
+  val CONNECTION = "connection"
+  val HOST = "host"
 
-    val strippedHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION).map(_.toLowerCase)
+  val strippedHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
+
+  def prepareRequest(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
+    // Add a Host header with the proper destination
+    // Then add a `Connection: keep-alive` header to ensure keep-alive even when HTTP 1.0 is used
+    // Then filter out headers that are handled by Spray + the Host header
+    val headers = Host(destination) :: Connection("keep-alive") :: stripRequestHeaders(request.headers)
+
+    request.copy(
+      // Set a relative path as URI, discarding NLB's hostname and port
+      uri = Uri(request.uri.path.toString),
+      headers = headers
+    )
   }
 
-  def sanitizeHeaders: PartialFunction[Any, Any] = {
-    case response: HttpResponse =>
-      SprayUtils.withHeadersStripped(response)
+  def stripRequestHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
+    headers.filterNot { header =>
+      (strippedHeaders + HOST).contains(header.lowercaseName)
+    }
+  }
 
-    case responseStart: ChunkedResponseStart =>
-      SprayUtils.withHeadersStripped(responseStart)
+  def prepareResponse(response: HttpResponse, connectionHeader: Option[Connection]): HttpResponse = {
+    val headers = stripResponseHeaders(response.headers) ++ connectionHeader.toList
+    response.withHeaders(headers)
+  }
 
-    case chunkEnd: ChunkedMessageEnd =>
-      SprayUtils.withHeadersStripped(chunkEnd)
+  def prepareResponseStart(responseStart: ChunkedResponseStart, connectionHeader: Option[Connection]): ChunkedResponseStart = {
+    val headers = stripResponseHeaders(responseStart.response.headers) ++ connectionHeader.toList
+    val response = responseStart.response.withHeaders(headers)
 
-    case request: TracedRequest =>
-      request.copy(get = withHeadersStripped(request.get))
+    ChunkedResponseStart(response)
+  }
 
-    case other =>
-      other
+  def stripResponseHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
+    headers.filterNot(header => strippedHeaders.contains(header.lowercaseName))
   }
 
   def hasConnectionClose(headers: List[HttpHeader]) = headers.exists {
@@ -39,41 +55,9 @@ object SprayUtils {
     case _ => false
   }
 
-  def withHeadersStripped(response: HttpResponse): HttpResponse = {
-    response.copy(headers = stripHeaders(response.headers))
-  }
-
-  def withHeadersStripped(chunkEnd: ChunkedMessageEnd): ChunkedMessageEnd = {
-    chunkEnd.copy(trailer = stripHeaders(chunkEnd.trailer))
-  }
-
-  def withHeadersStripped(chunkStart: ChunkedResponseStart): ChunkedResponseStart = {
-    chunkStart.copy(response = chunkStart.response.copy(headers = stripHeaders(chunkStart.response.headers)))
-  }
-
-  def withHeadersStripped(request: HttpRequest): HttpRequest = {
-    request.copy(headers = stripHeaders(request.headers))
-  }
-
-  private def stripHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
-    import HttpHeaders.strippedHeaders
-
-    headers.filterNot(header => strippedHeaders.contains(header.lowercaseName))
-  }
-
-  def withNewHost(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
-    import HttpHeaders.HOST
-
-    val newAuthority = request.uri.authority.copy(
-      host = Uri.Host(destination.getHostName),
-      port = destination.getPort
-    )
-    val newUri = request.uri.copy(authority = newAuthority)
-    val newHeaders = new RawHeader(HOST, destination.getHostName + ":" + destination.getPort) :: request.headers.filterNot(_.lowercaseName == HOST.toLowerCase)
-
-    request.copy(
-      uri = newUri,
-      headers = newHeaders
-    )
+  def getConnectionHeader(request: HttpRequest): Option[Connection] = {
+    request.headers.collectFirst {
+      case x: Connection => x
+    }
   }
 }
