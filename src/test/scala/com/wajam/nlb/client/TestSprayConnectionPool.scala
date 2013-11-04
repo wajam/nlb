@@ -104,13 +104,13 @@ class TestPoolSupervisor(_system: ActorSystem)
   "The pool supervisor" should "respond with a client once it is connected" in new Builder {
     supervisor ! Props(new SuccessfulClient)
 
-    expectMsgClass(classOf[Some[ActorRef]])
+    expectMsgClass(classOf[Right[String, ActorRef]])
   }
 
   it should "respond with None if its connection fails" in new Builder {
     supervisor ! Props(new FailingClient)
 
-    expectMsg(None)
+    expectMsgClass(classOf[Left[String, ActorRef]])
   }
 
   it should "kill a connection and remove it from the pool once it dies" in new Builder {

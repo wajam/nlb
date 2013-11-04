@@ -8,6 +8,7 @@ import scala.concurrent.duration._
 import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.postfixOps
+import scala.util.{Either, Left, Right}
 import akka.io.IO
 import akka.actor._
 import akka.actor.SupervisorStrategy._
@@ -51,7 +52,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 
       forwarderLookup.get(client) match {
         case Some(forwarder) =>
-          forwarder ! Some(client)
+          forwarder ! Right(client)
           forwarderLookup - client
         case None =>
           log.warning("Received a Connect message with no associated Forwarder")
@@ -62,7 +63,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 
       forwarderLookup.get(client) match {
         case Some(forwarder) =>
-          forwarder ! None
+          forwarder ! Left("Connection failed")
           forwarderLookup - client
         case None =>
           log.warning("Received a ConnectionFailed message with no associated Forwarder")
@@ -76,7 +77,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
 
 object PoolSupervisor {
 
-  class ConnectionFailedException extends Exception("Could not obtain connection to endpoint")
+  class ConnectionFailedException(destination: InetSocketAddress, message: String) extends Exception("Could not obtain connection to " + destination.toString + " (" + message + ")")
 }
 
 /**
@@ -156,21 +157,21 @@ class SprayConnectionPool(
 
   // Get a new connection
   def getNewConnection(destination: InetSocketAddress): Future[ActorRef] = {
-    val future = poolSupervisor.ask(ClientActor.props(destination, IO(Http)))(Timeout(askTimeout.toMillis)).mapTo[Option[ActorRef]]
+    val future = poolSupervisor.ask(ClientActor.props(destination, IO(Http)))(Timeout(askTimeout.toMillis)).mapTo[Either[String, ActorRef]]
 
-    future.flatMap {
-      case Some(_) =>
+    future.map {
+      case Right(connection) =>
         connectionPoolCreateSuccessMeter.mark()
-        future.map(_.get)
-      case None =>
+        connection
+      case Left(message) =>
         connectionPoolCreateFailureMeter.mark()
-        Future.failed[ActorRef](new ConnectionFailedException)
+        throw new ConnectionFailedException(destination, message)
     } recoverWith {
       case e: AskTimeoutException =>
         connectionPoolAskTimeoutMeter.mark()
-        Future.failed[ActorRef](new ConnectionFailedException)
+        throw new ConnectionFailedException(destination, "The PoolSupervisor didn't respond in time")
       case e =>
-        Future.failed[ActorRef](new ConnectionFailedException)
+        throw new ConnectionFailedException(destination, e.getMessage)
     }
   }
 
