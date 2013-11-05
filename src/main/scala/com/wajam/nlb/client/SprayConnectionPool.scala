@@ -67,10 +67,14 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
       }
 
     case Terminated(client) =>
-      // Remove from the pool
-      pool.remove(client)
-      // Remove from the lookup
-      forwarderLookup -= client
+      try {
+        // Remove from the pool
+        pool.remove(client)
+      }
+      finally {
+        // Remove from the lookup
+        forwarderLookup -= client
+      }
   }
 }
 
