@@ -87,7 +87,7 @@ class ClientActor(
       // Bind the new forwarder
       forwarder = Some(sender)
 
-      val subContext = request.context.map { context => tracer.createSubcontext(context) }
+      implicit val subContext = request.context.map { context => tracer.createSubcontext(context) }
 
       tracer.trace(subContext) {
         tracer.record(Annotation.ClientSend(RpcName("nlb", "http", request.method, request.path)))
@@ -98,7 +98,7 @@ class ClientActor(
 
       server ! request.withNewContext(subContext).get
 
-      context.become(waitForResponse(subContext))
+      context.become(waitForResponse)
       log.debug("Received a new request to send")
   }
 
@@ -113,7 +113,7 @@ class ClientActor(
       clusterReplyTimer.stop()
       chunkTransferTimer.start()
 
-      context.become(streamResponse(subContext, responseStart.response.status.intValue))
+      context.become(streamResponse(responseStart.response.status.intValue))
       chunkedResponsesMeter.mark()
       log.debug("Received a chunked response start")
 
@@ -135,7 +135,7 @@ class ClientActor(
       dispatchError(new SendFailedException)
   }
 
-  def streamResponse(implicit subContext: Option[TraceContext], status: Int): Receive = handleErrors orElse {
+  def streamResponse(status: Int)(implicit subContext: Option[TraceContext]): Receive = handleErrors orElse {
     case chunk: MessageChunk =>
       forward(chunk)
       log.debug("Received a chunk")
@@ -154,15 +154,15 @@ class ClientActor(
 
   // Common way of handling HttpResponse and ChunkedMessageEnd
   def handleResponse(response: HttpResponsePart, status: Int)(implicit subContext: Option[TraceContext]) = {
+    tracer.trace(subContext) {
+      tracer.record(Annotation.ClientRecv(Some(status)))
+    }
+
     // The connection will potentially be placed back in the pool:
     // make it ready to accept new requests
     context.become(waitForRequest)
 
     forward(response)
-
-    tracer.trace(subContext) {
-      tracer.record(Annotation.ClientRecv(Some(status)))
-    }
   }
 
   // Connection failures that can arise anytime (except in initial and connect modes)

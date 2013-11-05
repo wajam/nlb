@@ -3,6 +3,7 @@ package com.wajam.nlb.util
 import java.net.InetSocketAddress
 import spray.http._
 import spray.http.HttpHeaders.{Connection, Host}
+import spray.http.Uri.Authority
 
 object SprayUtils {
 
@@ -23,7 +24,7 @@ object SprayUtils {
 
     request.copy(
       // Set a relative path as URI, discarding NLB's hostname and port
-      uri = Uri(request.uri.path.toString),
+      uri = request.uri.copy(scheme = "", authority = Authority.Empty),
       headers = headers
     )
   }
