@@ -50,7 +50,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
       forwarderLookup.get(client) match {
         case Some(forwarder) =>
           forwarder ! Some(client)
-          forwarderLookup - client
+          forwarderLookup -= client
         case None =>
           log.warning("Received a Connect message with no associated Forwarder")
       }
@@ -61,7 +61,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
       forwarderLookup.get(client) match {
         case Some(forwarder) =>
           forwarder ! None
-          forwarderLookup - client
+          forwarderLookup -= client
         case None =>
           log.warning("Received a ConnectionFailed message with no associated Forwarder")
       }
@@ -70,7 +70,7 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
       // Remove from the pool
       pool.remove(client)
       // Remove from the lookup
-      forwarderLookup - client
+      forwarderLookup -= client
   }
 }
 
