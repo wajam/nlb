@@ -66,9 +66,11 @@ class PoolSupervisor(val pool: SprayConnectionPool) extends Actor with ActorLogg
           log.warning("Received a ConnectionFailed message with no associated Forwarder")
       }
 
-    case Terminated(child) =>
-      // Remove the actor when he's dead
-      pool.remove(child)
+    case Terminated(client) =>
+      // Remove from the pool
+      pool.remove(client)
+      // Remove from the lookup
+      forwarderLookup - client
   }
 }
 
