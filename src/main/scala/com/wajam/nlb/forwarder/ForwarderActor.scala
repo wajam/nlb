@@ -7,6 +7,7 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{Success, Failure}
 import akka.actor.{ReceiveTimeout, Terminated, Actor, ActorRef, ActorLogging, Props}
 import spray.http._
+import spray.can.Http.Abort
 import com.wajam.tracing.{RpcName, Annotation, Tracer}
 import com.wajam.nlb.client.{ClientActor, SprayConnectionPool}
 import ClientActor.ClientException
@@ -22,7 +23,11 @@ class ForwarderActor(
   with ActorLogging
   with Timing {
 
-  private val connectionFallbacksMeter = metrics.meter("forwarder-connection-fallbacks", "fallbacks")
+  private val connectionFallbacksMeter = metrics.meter("connection-fallbacks", "fallbacks")
+  private val requestAbortsMeter =       metrics.meter("request-aborts", "aborts")
+  private val requestTimeoutsMeter =     metrics.meter("request-timeouts", "timeouts")
+  private val streamingTimeoutsMeter =   metrics.meter("streaming-timeouts", "timeouts")
+  private val noConnectionMeter =        metrics.meter("no-connection", "timeouts")
 
   // This timeout ensures the Forwarder actor doesn't hung up forever,
   // in case it doesn't receive the request properly.
@@ -63,10 +68,11 @@ class ForwarderActor(
             waitForResponse(client, destination, tracedRequest, connectionHeader, connection)
           )
         }
-      }
-      catch {
+      } catch {
         case e: Throwable =>
           client ! HttpResponse(status = 500, entity = HttpEntity(e.getMessage))
+          requestAbortsMeter.mark()
+          context.stop(self)
       }
 
     case ReceiveTimeout =>
@@ -127,6 +133,12 @@ class ForwarderActor(
       context.become(
         streamResponse(client, destination, tracedRequest, clientConnection)
       )
+
+    case ReceiveTimeout =>
+      log.warning("Forwarder timeout while waiting for response from {}{}", destination.toString, tracedRequest.get.uri.toString)
+      client ! HttpResponse(status = 500, entity = HttpEntity("Request timed out"))
+      requestTimeoutsMeter.mark()
+      context.stop(self)
   }
 
   def streamResponse(client: ActorRef,
@@ -153,6 +165,12 @@ class ForwarderActor(
       log.debug("Forwarder received MessageChunk")
 
       client ! chunk
+
+    case ReceiveTimeout =>
+      log.warning("Forwarder timeout while streaming")
+      client ! Abort
+      streamingTimeoutsMeter.mark()
+      context.stop(self)
   }
 
   def handleClientErrors(client: ActorRef): Receive = {
@@ -167,6 +185,7 @@ class ForwarderActor(
         block(connection)
       case Failure(e) =>
         client ! HttpResponse(status = 503, entity = HttpEntity("Could not connect to destination: " + e.getMessage))
+        noConnectionMeter.mark()
         context.stop(self)
     }
   }

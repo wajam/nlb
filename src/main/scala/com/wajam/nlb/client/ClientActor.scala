@@ -61,11 +61,11 @@ class ClientActor(
       // Once connected, keep a reference to the connector
       server = sender
 
-      // Notify the PoolSupervisor that the connection is established
-      context.parent ! Connected
-
       // Wait for a request to arrive
       context.become(waitForRequest)
+
+      // Notify the PoolSupervisor that the connection is established
+      context.parent ! Connected
 
       openConnectionsCounter += 1
 
