@@ -84,7 +84,7 @@ class ForwarderActor(
                       destination: InetSocketAddress,
                       tracedRequest: TracedRequest,
                       connectionHeader: Option[Connection],
-                      clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
+                      clientConnection: ActorRef): Receive = handleClientErrors(client, destination, tracedRequest.get) orElse {
     case Terminated(_) =>
       /* When the connection from the pool dies (possible race),
          and we haven't transmitted anything yet,
@@ -135,7 +135,7 @@ class ForwarderActor(
       )
 
     case ReceiveTimeout =>
-      log.warning("Forwarder timeout while waiting for response from {}{}", destination.toString, tracedRequest.get.uri.toString)
+      log.warning("Forwarder timeout while waiting for response on {} {}{}", tracedRequest.get.method.toString, destination.getHostString, tracedRequest.get.uri.toString)
       client ! HttpResponse(status = 500, entity = HttpEntity("Request timed out"))
       requestTimeoutsMeter.mark()
       context.stop(self)
@@ -144,7 +144,7 @@ class ForwarderActor(
   def streamResponse(client: ActorRef,
                      destination: InetSocketAddress,
                      tracedRequest: TracedRequest,
-                     clientConnection: ActorRef): Receive = handleClientErrors(client) orElse {
+                     clientConnection: ActorRef): Receive = handleClientErrors(client, destination, tracedRequest.get) orElse {
     case responseEnd: ChunkedMessageEnd =>
       client ! responseEnd
 
@@ -173,9 +173,10 @@ class ForwarderActor(
       context.stop(self)
   }
 
-  def handleClientErrors(client: ActorRef): Receive = {
+  def handleClientErrors(client: ActorRef, destination: InetSocketAddress, request: HttpRequest): Receive = {
     case e: ClientException =>
       client ! HttpResponse(status = 500, entity = HttpEntity("HTTP client error: " + e.getMessage))
+      log.warning("Client error: {} on {} {}{}", e.getMessage, request.method.toString, destination.getHostString, request.uri.toString)
       context.stop(self)
   }
 
