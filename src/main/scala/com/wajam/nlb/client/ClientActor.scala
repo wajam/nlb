@@ -221,9 +221,10 @@ class ClientActor(
 
 object ClientActor {
   def props(
-      destination: InetSocketAddress,
-      IOconnector: ActorRef)
-      (implicit tracer: Tracer) = Props(classOf[ClientActor], destination, IOconnector, tracer)
+      IOconnector: ActorRef,
+      tracer: Tracer)(
+      destination: InetSocketAddress
+      ) = Props(classOf[ClientActor], destination, IOconnector, tracer)
 
   object Connected
   object ConnectionFailed

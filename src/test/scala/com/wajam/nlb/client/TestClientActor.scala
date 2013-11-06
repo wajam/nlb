@@ -82,7 +82,7 @@ class TestClientActor(_system: ActorSystem)
     val forwarder = new ForwarderProbe
     val server = new ServerProbe
 
-    val client = TestActorRef(ClientActor.props(destination, connector.ref), testActor, Random.nextString(1))
+    val client = TestActorRef(ClientActor.props(connector.ref, tracer)(destination), testActor, Random.nextString(1))
   }
 
   override def afterAll {

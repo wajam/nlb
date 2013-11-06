@@ -196,6 +196,6 @@ object ForwarderActor {
   def props(
       pool: SprayConnectionPool,
       router: Router,
-      timeout: Duration)
-      (implicit tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, timeout, tracer)
+      timeout: Duration,
+      tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, timeout, tracer)
 }

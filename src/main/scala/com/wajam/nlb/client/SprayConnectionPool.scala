@@ -9,16 +9,14 @@ import scala.concurrent.Future
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.postfixOps
 import scala.util.{Either, Left, Right}
-import akka.io.IO
 import akka.actor._
 import akka.actor.SupervisorStrategy._
 import akka.util.Timeout
 import akka.pattern.{AskTimeoutException, ask}
-import spray.can.Http
 import com.yammer.metrics.scala.Instrumented
-import com.wajam.tracing.Tracer
 import com.wajam.commons.Logging
 import com.wajam.nlb.client.ClientActor.{Connected, ConnectionFailed}
+import com.wajam.nlb.Nlb.ClientFactory
 import PoolSupervisor._
 
 /**
@@ -93,8 +91,7 @@ object PoolSupervisor {
 class SprayConnectionPool(
     maxSize: Int,
     askTimeout: Duration)
-    (implicit system: ActorSystem,
-    tracer: Tracer)
+    (implicit system: ActorSystem)
   extends Instrumented
   with Logging {
 
@@ -162,7 +159,7 @@ class SprayConnectionPool(
 
   // Get a new connection
   def getNewConnection(destination: InetSocketAddress): Future[ActorRef] = {
-    val future = poolSupervisor.ask(ClientActor.props(destination, IO(Http)))(Timeout(askTimeout.toMillis)).mapTo[Either[String, ActorRef]]
+    val future = poolSupervisor.ask(ClientFactory.apply(destination))(Timeout(askTimeout.toMillis)).mapTo[Either[String, ActorRef]]
 
     future.map {
       case Right(connection) =>
