@@ -3,6 +3,7 @@ package com.wajam.nlb.client
 import java.net.InetSocketAddress
 import scala.language.postfixOps
 import scala.concurrent.duration._
+import scala.concurrent.Await
 import org.junit.runner.RunWith
 import org.scalatest.{BeforeAndAfterAll, FlatSpec, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
@@ -37,9 +38,9 @@ class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoS
 
   "The connection pool" should "pool connection" in new Builder {
     pool.poolConnection(destination, dummyConnectionRef)
-    val connection = pool.getConnection(destination)
+    val connection = Await.result(pool.getConnection(destination), 100 milliseconds)
 
-    connection should equal (Some(dummyConnectionRef))
+    connection should equal (dummyConnectionRef)
   }
 
   it should "be empty after removing only connection" in new Builder {
@@ -103,13 +104,13 @@ class TestPoolSupervisor(_system: ActorSystem)
   "The pool supervisor" should "respond with a client once it is connected" in new Builder {
     supervisor ! Props(new SuccessfulClient)
 
-    expectMsgClass(classOf[Some[ActorRef]])
+    expectMsgClass(classOf[Right[String, ActorRef]])
   }
 
   it should "respond with None if its connection fails" in new Builder {
     supervisor ! Props(new FailingClient)
 
-    expectMsg(None)
+    expectMsgClass(classOf[Left[String, ActorRef]])
   }
 
   it should "kill a connection and remove it from the pool once it dies" in new Builder {
