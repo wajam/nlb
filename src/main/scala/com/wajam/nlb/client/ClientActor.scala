@@ -209,7 +209,7 @@ class ClientActor(
   }
 
   def dispatchError(e: Exception): Unit = {
-    log.debug(e.getMessage)
+    // Logging is done at the Forwarder level
     forward(e)
     throw e
   }
