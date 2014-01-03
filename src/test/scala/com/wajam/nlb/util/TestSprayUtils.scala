@@ -78,6 +78,6 @@ class TestSprayUtils extends FlatSpec {
   it should "strip headers handled by Spray, except Content-Type, and respect original Connection header when preparing a ChunkedResponseStart" in new WithResponse {
     val responseStart = ChunkedResponseStart(response)
 
-    prepareResponseStart(responseStart, Some(keepaliveHeader)).response.headers should equal(allowedHeaders :+ contentType :+ keepaliveHeader)
+    prepareResponseStart(responseStart, Some(keepaliveHeader)).response.headers should equal((contentType :: allowedHeaders) :+ keepaliveHeader)
   }
 }
