@@ -1,6 +1,6 @@
 package com.wajam.nlb
 
-import akka.actor.{Props, ActorRef, ActorSystem}
+import akka.actor.ActorSystem
 import akka.io.IO
 import scala.concurrent.duration._
 import spray.can.Http
@@ -13,7 +13,7 @@ import com.wajam.commons.Logging
 import com.typesafe.config.ConfigFactory
 import com.yammer.metrics.reporting.GraphiteReporter
 import java.util.concurrent.TimeUnit
-import java.net.{InetSocketAddress, InetAddress}
+import java.net.InetAddress
 import spray.can.server.ServerSettings
 import spray.http.HttpHeaders.Host
 import scala.language.postfixOps

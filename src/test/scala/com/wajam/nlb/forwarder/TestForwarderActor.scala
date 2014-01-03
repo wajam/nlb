@@ -130,19 +130,19 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
     }
     expectMsgPF() {
       // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].bodyAsString == "0" =>
+      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "0" =>
     }
     expectMsgPF() {
       // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].bodyAsString == "1" =>
+      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "1" =>
     }
     expectMsgPF() {
       // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].bodyAsString == "2" =>
+      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "2" =>
     }
     expectMsgPF() {
       // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].bodyAsString == "3" =>
+      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "3" =>
     }
     expectMsgPF() {
       // Check that the response is forwarded to Client

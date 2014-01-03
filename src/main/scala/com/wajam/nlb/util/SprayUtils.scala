@@ -14,7 +14,9 @@ object SprayUtils {
   val CONNECTION = "connection"
   val HOST = "host"
 
-  val strippedHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
+  val strippedRequestHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION, HOST)
+  val strippedResponseHeaders = Set(CONTENT_TYPE, CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
+  val strippedResponseStartHeaders = Set(CONTENT_LENGTH, TRANSFER_ENCODING, USER_AGENT, CONNECTION)
 
   def prepareRequest(request: HttpRequest, destination: InetSocketAddress): HttpRequest = {
     // Add a Host header with the proper destination
@@ -30,9 +32,7 @@ object SprayUtils {
   }
 
   def stripRequestHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
-    headers.filterNot { header =>
-      (strippedHeaders + HOST).contains(header.lowercaseName)
-    }
+    headers.filterNot(header => strippedRequestHeaders.contains(header.lowercaseName))
   }
 
   def prepareResponse(response: HttpResponse, connectionHeader: Option[Connection]): HttpResponse = {
@@ -41,14 +41,18 @@ object SprayUtils {
   }
 
   def prepareResponseStart(responseStart: ChunkedResponseStart, connectionHeader: Option[Connection]): ChunkedResponseStart = {
-    val headers = stripResponseHeaders(responseStart.response.headers) ++ connectionHeader.toList
+    val headers = stripResponseStartHeaders(responseStart.response.headers) ++ connectionHeader.toList
     val response = responseStart.response.withHeaders(headers)
 
     ChunkedResponseStart(response)
   }
 
   def stripResponseHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
-    headers.filterNot(header => strippedHeaders.contains(header.lowercaseName))
+    headers.filterNot(header => strippedResponseHeaders.contains(header.lowercaseName))
+  }
+
+  def stripResponseStartHeaders(headers: List[HttpHeader]): List[HttpHeader] = {
+    headers.filterNot(header => strippedResponseStartHeaders.contains(header.lowercaseName))
   }
 
   def hasConnectionClose(headers: List[HttpHeader]) = headers.exists {

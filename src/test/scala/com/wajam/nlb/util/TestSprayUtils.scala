@@ -13,9 +13,11 @@ import SprayUtils._
 @RunWith(classOf[JUnitRunner])
 class TestSprayUtils extends FlatSpec {
 
+  val contentType = `Content-Type`(`text/plain`)
+
   val forbiddenHeaders = List(
     `Content-Length`(1234),
-    `Content-Type`(`text/plain`),
+    contentType,
     `Transfer-Encoding`("gzip"),
     `User-Agent`("spray-can/1.x"),
     Connection("close")
@@ -73,9 +75,9 @@ class TestSprayUtils extends FlatSpec {
     prepareResponse(response, Some(keepaliveHeader)).headers should equal(allowedHeaders :+ keepaliveHeader)
   }
 
-  it should "strip headers handled by Spray and respect original Connection header when preparing a ChunkedResponseStart" in new WithResponse {
+  it should "strip headers handled by Spray, except Content-Type, and respect original Connection header when preparing a ChunkedResponseStart" in new WithResponse {
     val responseStart = ChunkedResponseStart(response)
 
-    prepareResponseStart(responseStart, Some(keepaliveHeader)).response.headers should equal(allowedHeaders :+ keepaliveHeader)
+    prepareResponseStart(responseStart, Some(keepaliveHeader)).response.headers should equal((contentType :: allowedHeaders) :+ keepaliveHeader)
   }
 }

@@ -36,13 +36,13 @@ object NlbBuild extends Build {
     "junit" % "junit" % "4.11" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe" % "config" % "1.0.2",
-    "com.typesafe.akka" %% "akka-actor" % "2.2.0",
-    "com.typesafe.akka" %% "akka-testkit" % "2.2.0",
-    "com.typesafe.akka" %% "akka-slf4j" % "2.2.0",
-    "io.spray" % "spray-io" % "1.2-20130822",
-    "io.spray" % "spray-http" % "1.2-20130822",
-    "io.spray" % "spray-util" % "1.2-20130822",
-    "io.spray" % "spray-can" % "1.2-20130822"
+    "com.typesafe.akka" %% "akka-actor" % "2.2.3",
+    "com.typesafe.akka" %% "akka-testkit" % "2.2.3",
+    "com.typesafe.akka" %% "akka-slf4j" % "2.2.3",
+    "io.spray" % "spray-io" % "1.2.0",
+    "io.spray" % "spray-http" % "1.2.0",
+    "io.spray" % "spray-util" % "1.2.0",
+    "io.spray" % "spray-can" % "1.2.0"
   ).map { module =>
     module.excludeAll(
       ExclusionRule(organization = "org.slf4j"),
