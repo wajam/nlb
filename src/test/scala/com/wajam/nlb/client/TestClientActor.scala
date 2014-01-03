@@ -57,7 +57,7 @@ class TestClientActor(_system: ActorSystem)
 
       def replyWithChunkedSequence() = {
         val chunkStart = new ChunkedResponseStart(HTTP_RESPONSE)
-        val messageChunk = new MessageChunk(Array[Byte](1, 0), "")
+        val messageChunk = MessageChunk(Array[Byte](1, 0))
         val chunkEnd = ChunkedMessageEnd()
 
         send(client, chunkStart)
