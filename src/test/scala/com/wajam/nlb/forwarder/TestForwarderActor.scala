@@ -3,31 +3,35 @@ package com.wajam.nlb.forwarder
 import java.net.InetSocketAddress
 import scala.language.postfixOps
 import scala.concurrent.duration._
-import scala.concurrent.Future
+import scala.concurrent.{Await, Future}
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterAll, BeforeAndAfter, FunSuite}
+import org.scalatest.{BeforeAndAfterAll, FlatSpec}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.mock.MockitoSugar
 import org.mockito.Mockito._
 import com.typesafe.config.ConfigFactory
 import akka.actor.{Props, ActorSystem}
-import akka.testkit.{TestActorRef, ImplicitSender, TestKit}
+import akka.testkit.{TestProbe, TestActorRef, TestKit}
 import akka.util.Timeout
+import akka.pattern.gracefulStop
 import spray.http.HttpMethods.GET
 import spray.http._
-import com.wajam.nlb.test.ActorProxy
 import com.wajam.nlb.client.SprayConnectionPool
 import com.wajam.tracing.{NullTraceRecorder, Tracer}
 import com.wajam.nlb.util.{TracedRequest, Router}
 
 @RunWith(classOf[JUnitRunner])
-class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with ImplicitSender with ActorProxy with FunSuite with BeforeAndAfter with BeforeAndAfterAll with MockitoSugar {
+class TestForwarderActor(_system: ActorSystem)
+  extends TestKit(_system)
+  with FlatSpec
+  with BeforeAndAfterAll
+  with MockitoSugar {
 
-  def this() = this(ActorSystem("TestClientActor", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
+  def this() = this(ActorSystem("TestForwarderActor", ConfigFactory.parseString("""akka.loggers = ["akka.testkit.TestEventListener"]""")))
 
   implicit val askTimeout = Timeout(5 seconds)
 
-  val idleTimeout = 1 second
+  val idleTimeout = 3 seconds
 
   implicit val tracer = new Tracer(NullTraceRecorder)
 
@@ -39,115 +43,73 @@ class TestForwarderActor(_system: ActorSystem) extends TestKit(_system) with Imp
 
   val pool = mock[SprayConnectionPool]
 
-  val request = new HttpRequest(GET, Uri(path))
-  val response = new HttpResponse()
+  val HTTP_REQUEST = new HttpRequest(GET, Uri(path))
+  val HTTP_RESPONSE = new HttpResponse()
+  val HTTP_CHUNK_START = new ChunkedResponseStart(HTTP_RESPONSE)
+  val HTTP_CHUNK_END = new ChunkedMessageEnd("")
 
-  var clientRef: TestActorRef[ClientProxyActor] = _
-  var clientActorRef: TestActorRef[ClientActorProxyActor] = _
-  var newClientActorRef: TestActorRef[ClientActorProxyActor] = _
-  var forwarderRef: TestActorRef[ForwarderActor] = _
+  trait Builder {
+    val client = new TestProbe(system)
+    val server = new TestProbe(system)
 
-  class ClientProxyActor extends ProxyActor {
-    def wrap(msg: Any) = ClientMessage(msg)
-  }
-  case class ClientMessage(msg: Any)
+    val forwarder = TestActorRef(Props(classOf[ForwarderActor], pool, router, idleTimeout, tracer))
 
-  class ClientActorProxyActor extends ProxyActor {
-    def wrap(msg: Any) = ClientActorMessage(msg)
-  }
-  case class ClientActorMessage(msg: Any)
+    when(pool.getConnection(destination)).thenReturn(Future.successful(client.testActor))
 
-  before {
-    clientRef = TestActorRef(Props(new ClientProxyActor()))
-    clientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
-    newClientActorRef = TestActorRef(Props(new ClientActorProxyActor()))
+    server.send(forwarder, HTTP_REQUEST)
 
-    when(pool.getNewConnection(destination)).thenReturn(Future.successful(newClientActorRef))
-    when(pool.getConnection(destination)).thenReturn(Future.successful(clientActorRef))
-
-    forwarderRef = TestActorRef(Props(new ForwarderActor(pool, router, idleTimeout, tracer)))
-
-    clientRef ! TellTo(forwarderRef, request)
-
-    expectMsgPF() {
-      // Check that the request is sent to ClientActor
-      case ClientActorMessage(msg) if msg.isInstanceOf[TracedRequest] =>
-    }
-  }
-
-  after {
-    clientRef.stop()
-    clientActorRef.stop()
-    newClientActorRef.stop()
-    forwarderRef.stop()
+    // Let the forwarder move to waitForResponse state
+    Thread.sleep(200)
   }
 
   override def afterAll {
-    _system.shutdown()
-    _system.awaitTermination()
+    TestKit.shutdownActorSystem(system)
   }
 
-  test("should pick a new ClientActor and re-send the request in case the initial ClientActor dies before transmitting") {
-    _system.stop(clientActorRef)
+  "a ForwarderActor" should "pick a new ClientActor and re-send the request in case the initial ClientActor dies before transmitting" in new Builder {
+    val newClient = new TestProbe(system)
 
-    expectMsgPF() {
-      // Check that the request is sent to the new ClientActor
-      case ClientActorMessage(msg) if msg.isInstanceOf[TracedRequest] =>
-        // Check that the ForwarderActor has asked for a new connection
-        verify(pool).getNewConnection(destination)
-    }
+    when(pool.getNewConnection(destination)).thenReturn(Future.successful(newClient.testActor))
+
+    verify(pool).getConnection(destination)
+
+    // Synchronously stop the client connection actor
+    val stopped: Future[Boolean] = gracefulStop(client.testActor, 5 seconds)
+    Await.result(stopped, 6 seconds)
+
+    // Check that a new connection is requested
+    verify(pool, timeout(500)).getNewConnection(destination)
+    // Check that the new connection is used
+    newClient.expectMsgClass(classOf[TracedRequest])
   }
 
-  test("should forward a HttpResponse from ClientActor to Client") {
-    clientActorRef ! TellTo(forwarderRef, response)
+  it should "forward a HttpResponse from client to server" in new Builder {
+    client.send(forwarder, HTTP_RESPONSE)
 
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[HttpResponse] =>
-    }
+    server.expectMsg(HTTP_RESPONSE)
   }
 
-  test("should forward a ChunkedResponseStart from ClientActor to Client") {
-    clientActorRef ! TellTo(forwarderRef, new ChunkedResponseStart(response))
+  it should "forward a ChunkedResponseStart from client to server" in new Builder {
+    client.send(forwarder, HTTP_CHUNK_START)
 
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[ChunkedResponseStart] =>
-    }
+    server.expectMsg(HTTP_CHUNK_START)
   }
 
-  test("should forward a sequence of ChunkedResponseStart, MessageChunks, ChunkedMessageEnd to Client") {
-    clientActorRef ! TellTo(forwarderRef, new ChunkedResponseStart(response))
-    clientActorRef ! TellTo(forwarderRef, MessageChunk("0"))
-    clientActorRef ! TellTo(forwarderRef, MessageChunk("1"))
-    clientActorRef ! TellTo(forwarderRef, MessageChunk("2"))
-    clientActorRef ! TellTo(forwarderRef, MessageChunk("3"))
-    clientActorRef ! TellTo(forwarderRef, new ChunkedMessageEnd(""))
+  it should "forward a sequence of ChunkedResponseStart, MessageChunks, ChunkedMessageEnd to Client" in new Builder {
+    val chunks = for(i <- 0 to 3) yield MessageChunk(i.toString)
 
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[ChunkedResponseStart] =>
+    // Send a chunked message from client to forwarder
+    client.send(forwarder, HTTP_CHUNK_START)
+    chunks.map { chunk =>
+      client.send(forwarder, chunk)
     }
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "0" =>
+    client.send(forwarder, HTTP_CHUNK_END)
+
+    // Check that server receives everything in order
+    server.expectMsg(HTTP_CHUNK_START)
+    chunks.map { chunk =>
+      server.expectMsg(chunk)
     }
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "1" =>
-    }
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "2" =>
-    }
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[MessageChunk] && msg.asInstanceOf[MessageChunk].data.asString == "3" =>
-    }
-    expectMsgPF() {
-      // Check that the response is forwarded to Client
-      case ClientMessage(msg) if msg.isInstanceOf[ChunkedMessageEnd] =>
-    }
+    server.expectMsg(HTTP_CHUNK_END)
   }
-
 }
