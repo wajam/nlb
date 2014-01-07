@@ -1,6 +1,6 @@
 package com.wajam.nlb.util
 
-import org.scalatest.{BeforeAndAfter, FunSuite}
+import org.scalatest.FlatSpec
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.matchers.ShouldMatchers._
@@ -11,7 +11,7 @@ import com.wajam.tracing.{ConsoleTraceRecorder, Tracer, TraceContext}
 import org.scalatest.mock.MockitoSugar
 
 @RunWith(classOf[JUnitRunner])
-class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
+class TestTracedMessage extends FlatSpec with MockitoSugar {
 
   implicit val tracer = new Tracer(ConsoleTraceRecorder)
 
@@ -24,7 +24,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
 
   val sampleContext = TraceContext(traceId, spanId, parentId, sampled)
 
-  test("should extract trace context from request headers") {
+  "a traced message" should "extract trace context from request headers" in {
     val request = new HttpRequest(headers = List(
       new RawHeader(TraceHeader.TraceId.toString, traceId),
       new RawHeader(TraceHeader.SpanId.toString, spanId),
@@ -39,7 +39,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
     tracedRequest.context should equal (expectedTraceContext)
   }
 
-  test("should create a new context if context headers are not set") {
+  it should "should create a new context if context headers are not set" in {
     val request = new HttpRequest()
 
     val tracedRequest = TracedRequest(request, startStopTimer)
@@ -47,7 +47,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
     tracedRequest.context should be ('defined)
   }
 
-  test("should respect the sampled header if set") {
+  it should "respect the sampled header if set" in {
     val request = new HttpRequest(headers = List(
       new RawHeader(TraceHeader.Sampled.toString, "true")
     ))
@@ -57,7 +57,7 @@ class TestTracedMessage extends FunSuite with BeforeAndAfter with MockitoSugar {
     tracedRequest.context.get.sampled should equal (Some(true))
   }
 
-  test("should set trace context in request headers") {
+  it should "set trace context in request headers" in {
     val request = new HttpRequest
 
     val tracedRequest = TracedRequest(request, startStopTimer).withNewContext(Some(sampleContext))
