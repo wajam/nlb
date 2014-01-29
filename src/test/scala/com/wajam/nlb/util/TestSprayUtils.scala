@@ -4,7 +4,7 @@ import java.net.InetSocketAddress
 import org.scalatest.FlatSpec
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.matchers.ShouldMatchers._
+import org.scalatest.Matchers._
 import spray.http._
 import spray.http.HttpHeaders._
 import spray.http.ContentTypes.`text/plain`

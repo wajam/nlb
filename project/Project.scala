@@ -32,7 +32,7 @@ object NlbBuild extends Build {
     "com.wajam" %% "nrv-core" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-scribe" % "0.1-SNAPSHOT",
     "com.wajam" %% "nrv-zookeeper" % "0.1-SNAPSHOT",
-    "org.scalatest" %% "scalatest" % "1.9.1" % "test,it",
+    "org.scalatest" %% "scalatest" % "2.0" % "test,it",
     "junit" % "junit" % "4.11" % "test,it",
     "org.mockito" % "mockito-core" % "1.9.0" % "test,it",
     "com.typesafe" % "config" % "1.0.2",

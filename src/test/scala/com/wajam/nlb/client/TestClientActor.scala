@@ -5,7 +5,7 @@ import scala.language.postfixOps
 import scala.concurrent.duration._
 import scala.util.Random
 import org.junit.runner.RunWith
-import org.scalatest.{FlatSpec, BeforeAndAfterAll, BeforeAndAfter}
+import org.scalatest.{FlatSpecLike, BeforeAndAfterAll, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.mock.MockitoSugar
 import com.typesafe.config.ConfigFactory
@@ -22,7 +22,7 @@ import ClientActor._
 @RunWith(classOf[JUnitRunner])
 class TestClientActor(_system: ActorSystem)
   extends TestKit(_system)
-  with FlatSpec
+  with FlatSpecLike
   with BeforeAndAfter
   with BeforeAndAfterAll
   with MockitoSugar {

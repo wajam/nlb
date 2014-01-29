@@ -3,7 +3,7 @@ package com.wajam.nlb.util
 import org.scalatest.FlatSpec
 import org.junit.runner.RunWith
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.matchers.ShouldMatchers._
+import org.scalatest.Matchers._
 import spray.http.{HttpHeader, HttpRequest}
 import spray.http.HttpHeaders.RawHeader
 import com.wajam.nrv.service.TraceHeader
