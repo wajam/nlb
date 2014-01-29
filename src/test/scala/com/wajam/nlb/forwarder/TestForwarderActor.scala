@@ -5,7 +5,7 @@ import scala.language.postfixOps
 import scala.concurrent.duration._
 import scala.concurrent.{Await, Future}
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterAll, FlatSpec}
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike}
 import org.scalatest.junit.JUnitRunner
 import org.scalatest.mock.MockitoSugar
 import org.mockito.Mockito._
@@ -23,7 +23,7 @@ import com.wajam.nlb.util.{TracedRequest, Router}
 @RunWith(classOf[JUnitRunner])
 class TestForwarderActor(_system: ActorSystem)
   extends TestKit(_system)
-  with FlatSpec
+  with FlatSpecLike
   with BeforeAndAfterAll
   with MockitoSugar {
 

@@ -5,9 +5,9 @@ import scala.language.postfixOps
 import scala.concurrent.duration._
 import scala.concurrent.Await
 import org.junit.runner.RunWith
-import org.scalatest.{BeforeAndAfterAll, FlatSpec, BeforeAndAfter}
+import org.scalatest.{BeforeAndAfterAll, FlatSpecLike, BeforeAndAfter}
 import org.scalatest.junit.JUnitRunner
-import org.scalatest.matchers.ShouldMatchers._
+import org.scalatest.Matchers._
 import org.scalatest.mock.MockitoSugar
 import akka.actor._
 import akka.testkit.{ImplicitSender, TestKit, TestActorRef}
@@ -21,7 +21,7 @@ class DummyActor extends Actor {
 }
 
 @RunWith(classOf[JUnitRunner])
-class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoSugar {
+class TestSprayConnectionPool extends FlatSpecLike with BeforeAndAfter with MockitoSugar {
   implicit val tracer = new Tracer(NullTraceRecorder)
 
   implicit val system = ActorSystem("TestSprayConnectionPool")
@@ -74,7 +74,7 @@ class TestSprayConnectionPool extends FlatSpec with BeforeAndAfter with MockitoS
 class TestPoolSupervisor(_system: ActorSystem)
   extends TestKit(_system)
   with ImplicitSender
-  with FlatSpec
+  with FlatSpecLike
   with BeforeAndAfter
   with BeforeAndAfterAll {
 
