@@ -18,6 +18,7 @@ class ForwarderActor(
     pool: SprayConnectionPool,
     router: Router,
     timeout: Duration,
+    serviceName: String,
     implicit val tracer: Tracer)
   extends Actor
   with ActorLogging
@@ -52,7 +53,7 @@ class ForwarderActor(
           val tracedRequest = TracedRequest(preparedRequest, totalTimeTimer)
 
           tracer.trace(tracedRequest.context) {
-            tracer.record(Annotation.ServerRecv(RpcName("nlb", "http", tracedRequest.method, tracedRequest.path)))
+            tracer.record(Annotation.ServerRecv(RpcName(s"nlb.${}", "http", tracedRequest.method, tracedRequest.path)))
             tracer.record(Annotation.ServerAddress(tracedRequest.address))
           }
 
@@ -198,5 +199,6 @@ object ForwarderActor {
       pool: SprayConnectionPool,
       router: Router,
       timeout: Duration,
-      tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, timeout, tracer)
+      serviceName: String,
+      tracer: Tracer) = Props(classOf[ForwarderActor], pool, router, timeout, serviceName, tracer)
 }

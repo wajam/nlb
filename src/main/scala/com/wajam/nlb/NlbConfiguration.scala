@@ -16,6 +16,10 @@ class NlbConfiguration(config: Config) {
     config.getString("nlb.resolving.service")
   }
 
+  def getRoutingService: String = {
+    config.getString("nlb.routing.service")
+  }
+
   def getNodeHttpPort: Int = {
     config.getInt("nlb.node.http-port")
   }
