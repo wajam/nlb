@@ -16,10 +16,6 @@ class NlbConfiguration(config: Config) {
     config.getString("nlb.resolving.service")
   }
 
-  def getRoutingService: String = {
-    config.getString("nlb.routing.service")
-  }
-
   def getNodeHttpPort: Int = {
     config.getInt("nlb.node.http-port")
   }
@@ -70,6 +66,10 @@ class NlbConfiguration(config: Config) {
 
   def getTraceRecorder: String = {
     config.getString("nlb.trace.recorder")
+  }
+
+  def getTraceServiceName: String = {
+    config.getString("nlb.trace.service-name")
   }
 
   def getTraceScribeHost: String = {

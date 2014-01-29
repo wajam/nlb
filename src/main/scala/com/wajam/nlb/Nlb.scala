@@ -68,7 +68,7 @@ object Nlb extends App with Logging {
   val pool = new SprayConnectionPool(config.getConnectionPoolMaxSize, config.getConnectionPoolAskTimeout milliseconds)
 
   object ForwarderFactory {
-    def apply = ForwarderActor.props(pool, router, config.getForwarderTimeout milliseconds, config.getRoutingService, tracer)
+    def apply = ForwarderActor.props(pool, router, config.getForwarderTimeout milliseconds, config.getTraceServiceName, tracer)
   }
 
   // the handler actor replies to incoming HttpRequests
