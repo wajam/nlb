@@ -53,7 +53,7 @@ class ForwarderActor(
           val tracedRequest = TracedRequest(preparedRequest, totalTimeTimer)
 
           tracer.trace(tracedRequest.context) {
-            tracer.record(Annotation.ServerRecv(RpcName(s"nlb.${}", "http", tracedRequest.method, tracedRequest.path)))
+            tracer.record(Annotation.ServerRecv(RpcName(s"nlb.$serviceName", "http", tracedRequest.method, tracedRequest.path)))
             tracer.record(Annotation.ServerAddress(tracedRequest.address))
           }
 
