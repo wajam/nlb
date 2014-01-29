@@ -37,6 +37,7 @@ class TestForwarderActor(_system: ActorSystem)
 
   val destination: InetSocketAddress = new InetSocketAddress("localhost", 9999)
   val path = "/test"
+  val serviceName = "test"
 
   val router = mock[Router]
   when(router.resolve(path)).thenReturn(destination)
@@ -52,7 +53,7 @@ class TestForwarderActor(_system: ActorSystem)
     val client = new TestProbe(system)
     val server = new TestProbe(system)
 
-    val forwarder = TestActorRef(Props(classOf[ForwarderActor], pool, router, idleTimeout, tracer))
+    val forwarder = TestActorRef(Props(classOf[ForwarderActor], pool, router, idleTimeout, serviceName, tracer))
 
     when(pool.getConnection(destination)).thenReturn(Future.successful(client.testActor))
 

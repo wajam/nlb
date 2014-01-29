@@ -68,6 +68,10 @@ class NlbConfiguration(config: Config) {
     config.getString("nlb.trace.recorder")
   }
 
+  def getTraceServiceName: String = {
+    config.getString("nlb.trace.service-name")
+  }
+
   def getTraceScribeHost: String = {
     config.getString("nlb.trace.scribe.host")
   }
